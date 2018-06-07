@@ -15,6 +15,7 @@ private:
 
 public:
     TF_MetaParser(std::string filename);
+    TF_MetaParser(const TF_MetaParser &p2);
     std::string& operator[] (std::string key);
     int getInt(std::string key);
 };

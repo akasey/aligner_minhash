@@ -5,12 +5,15 @@
 #include "tensorflow_inference.h"
 
 
-TensorflowInference::TensorflowInference(std::string graph_pb, std::string ip, std::string op, int k, int numThreads=1) {
+TensorflowInference::TensorflowInference(std::string graph_pb, TF_MetaParser &tf_meta, int numThreads=1) : tfMeta(tf_meta) {
     inputGraph = graph_pb;
-    input_layer = ip;
-    output_layer = op;
+    input_layer = tfMeta["input_layer"];
+    output_layer = tfMeta["output_layer"];
+    input_shape = tfMeta.getInt("input_shape");
+    output_shape = tfMeta.getInt("output_shape");
+    K = tfMeta.getInt("K");
     numCore = numThreads;
-    K = k;
+
     // First we load and initialize the model.
     Status load_graph_status = LoadGraph(inputGraph, &session);
     if (!load_graph_status.ok()) {
@@ -47,11 +50,11 @@ Status TensorflowInference::LoadGraph(const string& graph_file_name, std::unique
     if (!session_create_status.ok()) {
         return session_create_status;
     }
-    GetIOShapes(graph_def);
+//    GetIOShapes(graph_def);
     return Status::OK();
 }
 
-Status TensorflowInference::GetIOShapes(tensorflow::GraphDef &graphdef) {
+/*Status TensorflowInference::GetIOShapes(tensorflow::GraphDef &graphdef) {
     // Prepare dummy input
     Kmer *kmers; int totalKmer = 0;
     input_shape = std::pow(4, K);
@@ -63,7 +66,7 @@ Status TensorflowInference::GetIOShapes(tensorflow::GraphDef &graphdef) {
 
     output_shape = outputs[0].shape().dim_size(1);
     return Status::OK();
-}
+}*/
 
 Status TensorflowInference::GetNonZeroLabels(const std::vector<Tensor>& outputs, Tensor* coords) {
     auto root = tensorflow::Scope::NewRootScope();
@@ -89,28 +92,28 @@ Status TensorflowInference::GetNonZeroLabels(const std::vector<Tensor>& outputs,
     return Status::OK();
 }
 
-Tensor TensorflowInference::makeTensor(Kmer* kmers, int totalKmers) {
-    Tensor tensor(tensorflow::DT_FLOAT, tensorflow::TensorShape( {1,input_shape} ));
-    auto vector = tensor.matrix<float>();
-    for (int i=0; i<input_shape; i++) {
-        vector(0,i) = 0;
-    }
-    for (int i=0; i<totalKmers; i++) {
-        Kmer enumeration = kmers[i];
-        vector(0,enumeration) = 1;
+Tensor TensorflowInference::makeTensor(std::vector< std::pair<Kmer *, int> > pairs) {
+    int totalRows = pairs.size();
+    Tensor tensor(tensorflow::DT_FLOAT, tensorflow::TensorShape( { totalRows,input_shape} ));
+    for (int i=0; i< totalRows; i++) {
+        std::pair<Kmer *, int> kmerRows = pairs[i];
+        auto vector = tensor.matrix<float>();
+        for (int j = 0; j < input_shape; j++) {
+            vector(i, j) = 0;
+        }
+        for (int j = 0; j < kmerRows.second; j++) {
+            Kmer enumeration = kmerRows.first[j];
+            vector(i, enumeration) = 1;
+        }
     }
     return tensor;
 }
 
-std::set<int> TensorflowInference::inference(Kmer *kmers, int totalKmers) {
-    LOG(INFO) << "Making tensor for inference..";
-    Tensor tensor = makeTensor(kmers, totalKmers);
-
-    LOG(INFO) << "Model loaded.. now predicting..";
+std::vector<std::set<int> > TensorflowInference::inference(Tensor tensor) {
+    int numRows = tensor.dim_size(0);
     std::vector<Tensor> outputs;
     Status run_status = session->Run({{input_layer, tensor}},
                                      {output_layer}, {}, &outputs);
-    LOG(INFO) << "Session run done..";
     if (!run_status.ok()) {
         LOG(ERROR) << "Running model failed: " << run_status;
         throw TensorflowInferenceException("Session::Run failed..");
@@ -123,11 +126,11 @@ std::set<int> TensorflowInference::inference(Kmer *kmers, int totalKmers) {
         throw TensorflowInferenceException("GetNonZeroLabels failed..");
     }
 
-    std::set<int> toReturn;
-    for (int i=0; i<coord.NumElements()/2; i++) {
-        LOG(INFO) << coord.matrix<int64>()(i,1);
-        int category = coord.matrix<int64>()(i,1);
-        toReturn.insert(category);
+    std::vector<std::set<int> > toReturn(numRows);
+    for (int i=0; i<coord.NumElements(); i+=2) {
+        int rowNum = coord.matrix<int64>()(i);
+        int category = coord.matrix<int64>()(i+1);
+        toReturn[rowNum].insert(category);
     }
     return toReturn;
 }
@@ -137,4 +140,8 @@ int TensorflowInference::getOutputShape() {
 }
 int TensorflowInference::getInputShape() {
     return input_shape;
+}
+
+int TensorflowInference::getK() {
+    return K;
 }

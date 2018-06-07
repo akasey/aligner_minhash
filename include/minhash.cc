@@ -201,7 +201,6 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(Kmer* shingles, int totalSh
         neighbours.insert(rec);
     }
 
-    delete [] shingles;
     delete [] minhash;
     delete [] bandhashes;
 
@@ -264,6 +263,12 @@ void Minhash::deserialize(FILE *stream) {
     totalBands = tb;
     loadOneIndexFromFile(stream, index, tb);
     LOG(INFO) << "Deserialization complete..";
+}
+
+void Minhash::deserialize(std::string indexLocation) {
+    filename = indexLocation;
+    FILE *stream = fopen(indexLocation.c_str(), "rb");
+    this->deserialize(stream);
 }
 
 void Minhash::compareTest(Minhash &second) {

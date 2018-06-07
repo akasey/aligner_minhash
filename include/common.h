@@ -45,7 +45,10 @@ std::string & ltrim(std::string & str);
 std::string & rtrim(std::string & str);
 bool str_endswith(std::string &original, std::string &with);
 std::vector<std::string> split(std::string sentence, std::string delimiter);
+
+/* File system related */
 std::vector<std::string> getFilesInDirectory(std::string directory, std::string extensionFilter = "");
 void mkdir(std::string dirname);
+std::string basename(std::string &fqdn);
 
 #endif //ALIGNER_MINHASH_COMMON_H

@@ -62,7 +62,8 @@ std::vector<std::string> getFilesInDirectory(std::string directory, std::string 
         std::string filename = std::string(dp->d_name);
         if (filename.compare(".")==0 || filename.compare("..")==0 || (!extensionFilter.empty() && !str_endswith(filename, extensionFilter)))
             continue;
-        toReturn.push_back(std::string(dp->d_name));
+        std::string fqdn = directory + "/" + std::string(dp->d_name);
+        toReturn.push_back(fqdn);
     }
     return toReturn;
 }
@@ -78,4 +79,11 @@ std::vector<std::string> split(std::string sentence, std::string delimiter){
     }
     list.push_back(sentence);
     return list;
+}
+
+std::string basename(std::string &fqdn) {
+    std::size_t found = fqdn.rfind("/");
+    if (found==std::string::npos)
+        found = -1;
+    return fqdn.substr(found+1);
 }

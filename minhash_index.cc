@@ -10,7 +10,7 @@
 #include "include/ThreadPool.h"
 
 int createEachMinhashIndex(std::string &baseDirectory, const int segId, std::pair<int, std::string> &segmentPair, int windowLen) {
-    int strides = KMER_K -1;
+    int strides = 2;//KMER_K -1;
     Minhash mh;
     int startingPoint = segmentPair.first;
     std::map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
@@ -71,7 +71,7 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
 
 int main(int argc, const char* argv[]) {
     std::string baseDirectory = "" ;
-    int nThreads = 4;
+    int nThreads = 5;
     cxxopts::Options options("Minhash Indexer", "Create the minhash index for after classification.");
     options.add_options()
             ("d,dir", "Directory where sequence.fasta and classify_detail.log are placed.", cxxopts::value<std::string>(baseDirectory)->default_value("./"), "Base directory")

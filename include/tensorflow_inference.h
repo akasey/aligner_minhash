@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "kmer.h"
+#include "tf_metaparser.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/util/command_line_flags.h"
@@ -24,6 +25,7 @@ using tensorflow::int64;
 class TensorflowInference {
 private:
     std::string inputGraph;
+    TF_MetaParser tfMeta;
     string input_layer;
     string output_layer;
     int numCore;
@@ -32,18 +34,19 @@ private:
     std::unique_ptr<tensorflow::Session> session;
 
     Status LoadGraph(const string& graph_file_name, std::unique_ptr<tensorflow::Session>* session);
-    Status GetIOShapes(tensorflow::GraphDef &graphdef);
+//    Status GetIOShapes(tensorflow::GraphDef &graphdef);
     Status GetNonZeroLabels(const std::vector<Tensor>& outputs, Tensor* coords);
-    Tensor makeTensor(Kmer *kmers, int totalKmers);
 
 public:
-    TensorflowInference(std::string inputGraph, std::string ip, std::string op, int K, int numThreads);
+    TensorflowInference(std::string inputGraph, TF_MetaParser &tf_meta, int numThreads);
     ~TensorflowInference();
 //    TensorflowInference(const TensorflowInference &p2); // copy constructor
 
-    std::set<int> inference(Kmer *kmers, int totalKmers);
+    std::vector<std::set<int> > inference(Tensor);
+    Tensor makeTensor(std::vector< std::pair<Kmer *, int> > pairs);
     int getOutputShape();
     int getInputShape();
+    int getK();
 };
 
 
