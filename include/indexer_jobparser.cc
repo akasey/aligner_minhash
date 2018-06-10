@@ -51,16 +51,15 @@ void IndexerJobParser::readSegmentDescription(std::ifstream &fin) {
     }
 }
 
-std::map<int, std::pair<int, std::string>> IndexerJobParser::allClassificationJob(FastaMM *fasta) {
-    std::map<int, std::pair<int, std::string>> toReturn;
+void IndexerJobParser::prepareClassificationJob(FastaMM *fasta) {
+    classificationJob.clear();
     for (std::vector<Segment>::iterator itr=segments.begin(); itr!=segments.end(); itr++) {
         std::string * sequence = fasta->getGenomePart(itr->key);
         if (!sequence)
             throw ElementNotFoundException(itr->key);
         std::string segment = sequence->substr(itr->start, (itr->end-itr->start) );
-        toReturn[itr->segID] = std::pair<int, std::string>(itr->start, segment);
+        classificationJob[itr->segID] = std::pair<int, std::string>(itr->start, segment);
     }
-    return toReturn;
 };
 
 int IndexerJobParser::getIntMeta(std::string key) {
@@ -81,3 +80,31 @@ int IndexerJobParser::getNumClasses() {
 int IndexerJobParser::getK() {
     return getIntMeta("K");
 }
+
+IndexerJobParser::Iterator IndexerJobParser::makeJobIterator() {
+    Iterator iterator(&classificationJob);
+    return iterator;
+};
+
+std::pair<int, std::string> * IndexerJobParser::getSegmentForID(int id) {
+    std::map<int, std::pair<int, std::string>>::iterator hit = classificationJob.find(id);
+    if (hit == classificationJob.end())
+        return NULL;
+    return &(hit->second);
+};
+
+
+IndexerJobParser::Iterator::Iterator(std::map<int, std::pair<int, std::string>> *jobs) {
+    container = jobs;
+    itrPointer = container->begin();
+}
+bool IndexerJobParser::Iterator::hasNext() {
+    return itrPointer!= container->end();
+}
+
+std::pair<const int, std::pair<int, std::string>> IndexerJobParser::Iterator::next() {
+    std::pair<const int, std::pair<int, std::string>> element = *(itrPointer);
+    itrPointer++;
+    return element;
+
+};

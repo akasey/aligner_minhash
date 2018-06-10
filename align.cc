@@ -2,6 +2,7 @@
 // Created by Akash Shrestha on 5/10/18.
 //
 
+#include <sam_writer.h>
 #include "include/cxxopts.h"
 #include "include/common.h"
 #include "include/minhash.h"
@@ -9,6 +10,7 @@
 #include "include/tensorflow_inference.h"
 #include "include/ThreadPool.h"
 #include "include/fastaQ.h"
+#include "include/sam_writer.h"
 
 
 void processArguments(int argc, const char *argv[]) {
@@ -32,15 +34,22 @@ std::map<std::string, Minhash *> readIndices(std::vector<std::string> mhIndexLoc
 int main(int argc, const char* argv[]) {
     std::string tfModelDir = "" ;
     std::string mhIndexDir = "" ;
+    std::string referenceGenomeDir = "";
     std::string fastqFile = "" ;
     int nThreads = 4;
     int tfBatchSize = 1;
+
+    std::string wholeCommand = "";
+    for (int i=0; i<argc; i++) {
+        wholeCommand += std::string(argv[i]) + " ";
+    }
 
     cxxopts::Options options("Aligner", "Does alignment :)");
     options.add_options()
             ("m,tf_dir", "Directory where frozen_graph.pb is located", cxxopts::value<std::string>(tfModelDir), "TF Model dir")
             ("t,threads", "No. of threads", cxxopts::value<int>(nThreads), "Num Threads")
             ("i,minhash_dir", "Directory where all index-xx.mh files are located", cxxopts::value<std::string>(mhIndexDir), "Minhash index dir")
+            ("r,genome_dir", "Directory where sequence.fasta, classify_detail.log are located", cxxopts::value<std::string>(referenceGenomeDir), "Reference genome dir")
             ("f,fastq", "Input FastQ file for aligning", cxxopts::value<std::string>(fastqFile), "FastQ file");
 
 
@@ -55,12 +64,17 @@ int main(int argc, const char* argv[]) {
         exit(-1);
     }
 
-    if (tfModelDir.empty() || mhIndexDir.empty() || fastqFile.empty()) {
+    if (tfModelDir.empty() || mhIndexDir.empty() || fastqFile.empty() || referenceGenomeDir.empty()) {
         std::cerr << options.help() << std::endl;
         exit(-1);
     }
 
     // Actual main
+    FastaMM fastamm(referenceGenomeDir);
+    SamWriter samWriter(SamWriter::Mode::SINGLE, "x.sam");
+    samWriter.writeHeaders(wholeCommand, fastamm);
+
+
     LOG(INFO) << "Reading tensorflow graph...";
     TF_MetaParser tfMeta(tfModelDir+"/aligner.meta");
     TensorflowInference inferEngine(tfModelDir+"/frozen_graph.pb", tfMeta, nThreads);

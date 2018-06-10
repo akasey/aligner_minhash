@@ -52,10 +52,12 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
     try {
         ThreadPool threadPool(nThreads);
         std::vector< std::future<int> > results;
-        std::map<int, std::pair<int, std::string> > classificationTasks = jobParser.allClassificationJob(&fasta);
-        for(std::map<int, std::pair<int, std::string> >::iterator itr=classificationTasks.begin(); itr!=classificationTasks.end(); itr++) {
-            int segId = itr->first;
-            std::pair<int, std::string> segmentPair = itr->second;
+        jobParser.prepareClassificationJob(&fasta);
+        IndexerJobParser::Iterator iterator = jobParser.makeJobIterator();
+        while(iterator.hasNext()) {
+            std::pair<const int, std::pair<int, std::string>> itr = iterator.next();
+            int segId = itr.first;
+            std::pair<int, std::string> segmentPair = itr.second;
             results.emplace_back(
                 threadPool.enqueue(createEachMinhashIndex, baseDirectory, segId, segmentPair, windowLength)
             );

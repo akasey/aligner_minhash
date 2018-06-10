@@ -11,15 +11,18 @@ void FastaMM::readGenome() {
         exit(-1);
     }
     genomeDict.clear();
+    genomeLengthMeta.clear();
     std::string line, key;
     while (std::getline(fin, line)) {
         trim(line);
         if (line[0] == '>') {
             key = line;
             genomeDict[key] = "";
+            genomeLengthMeta[key] = 0;
         }
         else {
             genomeDict[key] += line;
+            genomeLengthMeta[key] += line.length();
         }
     }
     fin.close();
@@ -31,3 +34,7 @@ std::string * FastaMM::getGenomePart(std::string key) {
         return NULL;
     return &(hit->second);
 }
+
+std::map<std::string, int> FastaMM::getGenomeLengthMeta() {
+    return genomeLengthMeta;
+};

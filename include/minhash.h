@@ -29,7 +29,7 @@ class Minhash {
 private:
     typedef uint32_t DocID;
     static const int seed = 20; // murmur3 seed
-    static const int numHashes = 400;
+    static const int numHashes = 200;
     static const int LSH_bandSize = 4; // == numHashes/totalBands; choose totalBands such that it's int
     int totalBands = numHashes/LSH_bandSize;
     Kmer MAX_UINT;

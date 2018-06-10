@@ -231,7 +231,7 @@ void Minhash::serialize(FILE *stream) {
     int tb = totalBands;
     write_in_file((void *) &tb, sizeof(int), 1, stream);
     writeOneIndexToFile(stream, index);
-    LOG(INFO) << "Serialization complete..";
+    LOG(DEBUG) << "Serialization complete..";
 }
 
 void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::map<BandhashVar, std::set<DocID > > *> &index, int tb) {
@@ -262,7 +262,7 @@ void Minhash::deserialize(FILE *stream) {
     read_from_file((void *) &tb, sizeof(int), 1, stream);
     totalBands = tb;
     loadOneIndexFromFile(stream, index, tb);
-    LOG(INFO) << "Deserialization complete..";
+    LOG(DEBUG) << "Deserialization complete..";
 }
 
 void Minhash::deserialize(std::string indexLocation) {
@@ -280,7 +280,7 @@ void Minhash::compareTest(Minhash &second) {
         for (std::map<BandhashVar, std::set<DocID > >::iterator itrr = first->begin(); itrr!=first->end(); itrr++) {
             BandhashVar key = itrr->first;
             std::set<DocID > fromsecond = (*second)[key];
-            LOG(INFO) << (itrr->second == fromsecond ? "Equal sets" : "Not equal sets");
+            LOG(DEBUG) << (itrr->second == fromsecond ? "Equal sets" : "Not equal sets");
         }
     }
 }
