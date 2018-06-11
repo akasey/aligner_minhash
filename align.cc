@@ -11,6 +11,7 @@
 #include "include/ThreadPool.h"
 #include "include/fastaQ.h"
 #include "include/sam_writer.h"
+#include "include/indexer_jobparser.h"
 
 
 void processArguments(int argc, const char *argv[]) {
@@ -36,6 +37,7 @@ int main(int argc, const char* argv[]) {
     std::string mhIndexDir = "" ;
     std::string referenceGenomeDir = "";
     std::string fastqFile = "" ;
+    std::string samFile = "";
     int nThreads = 4;
     int tfBatchSize = 1;
 
@@ -50,7 +52,8 @@ int main(int argc, const char* argv[]) {
             ("t,threads", "No. of threads", cxxopts::value<int>(nThreads), "Num Threads")
             ("i,minhash_dir", "Directory where all index-xx.mh files are located", cxxopts::value<std::string>(mhIndexDir), "Minhash index dir")
             ("r,genome_dir", "Directory where sequence.fasta, classify_detail.log are located", cxxopts::value<std::string>(referenceGenomeDir), "Reference genome dir")
-            ("f,fastq", "Input FastQ file for aligning", cxxopts::value<std::string>(fastqFile), "FastQ file");
+            ("f,fastq", "Input FastQ file for aligning", cxxopts::value<std::string>(fastqFile), "FastQ file")
+            ("o,output", "Output SamFile", cxxopts::value<std::string>(fastqFile), "Sam file");
 
 
     std::vector<cxxopts::KeyValue> arguments;
@@ -68,11 +71,19 @@ int main(int argc, const char* argv[]) {
         std::cerr << options.help() << std::endl;
         exit(-1);
     }
+    if (samFile.empty()) {
+        samFile = referenceGenomeDir + "/alignment.sam";
+    }
 
     // Actual main
-    FastaMM fastamm(referenceGenomeDir);
-    SamWriter samWriter(SamWriter::Mode::SINGLE, "x.sam");
-    samWriter.writeHeaders(wholeCommand, fastamm);
+    IndexerJobParser referenceGenomeBrigde(referenceGenomeDir);
+    SamWriter samWriter(SamWriter::Mode::SINGLE, samFile);
+    { // scope to free some memory
+        FastaMM fastamm(referenceGenomeDir);
+        referenceGenomeBrigde.prepareClassificationJob(&fastamm);
+        samWriter.writeHeaders(wholeCommand, fastamm);
+    }
+
 
 
     LOG(INFO) << "Reading tensorflow graph...";
@@ -118,6 +129,7 @@ int main(int argc, const char* argv[]) {
             std::set<int> predicted = predictions[i];
             for (std::set<int>::iterator itrr = predicted.begin(); itrr != predicted.end(); itrr++) {
                 std::string key = "index-" + std::to_string(*itrr) + ".mh";
+                std::pair<int, string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(*itrr);
                 if (*itrr < mhIndices.size()) {
 //                    std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(itr->second.first, itr->second.second);
                     std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(itr->second.first, itr->second.second);
