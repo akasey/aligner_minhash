@@ -2,8 +2,13 @@ cmake_minimum_required(VERSION 3.8)
 project(aligner_minhash)
 
 set(CMAKE_CXX_STANDARD 11)
+# tensorflow package
 set(TensorflowCC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tf-standalone/")
 find_package(TensorflowCC REQUIRED)
+
+# SSW(Complete-Striped-Smith-Waterman-Library) Library
+set(SswCC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/")
+find_package(SswCC REQUIRED)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
@@ -24,3 +29,6 @@ add_executable(fastq_test tests/FastaQTest.cc include/common.cc include/fastaQ.c
 add_executable(inference_test tests/TensorflowInferenceTest.cc include/minhash.cc include/common.cc include/kmer.cc include/tensorflow_inference.cc include/tf_metaparser.cc)
 target_link_libraries(inference_test TensorflowCC::Static)
 target_link_libraries(inference_test ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(playground tests/PlayGround.cc dependencies/ssw/src/ssw.c)
+target_link_libraries(playground SswCC::Static)

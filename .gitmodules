@@ -1,0 +1,3 @@
+[submodule "dependencies/ssw"]
+	path = dependencies/ssw
+	url = https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library.git
