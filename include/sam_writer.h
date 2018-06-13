@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include "fastamm.h"
+#include "ssw_cpp.h"
 
 class SamWriter {
 public:
@@ -41,6 +42,8 @@ public:
 private:
     Mode mode;
     std::ofstream file;
+    StripedSmithWaterman::Aligner aligner;
+    StripedSmithWaterman::Filter filter;
 
     void writeHeaders(std::vector<Header> &headers);
 

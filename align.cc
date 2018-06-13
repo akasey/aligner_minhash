@@ -129,9 +129,9 @@ int main(int argc, const char* argv[]) {
             std::set<int> predicted = predictions[i];
             for (std::set<int>::iterator itrr = predicted.begin(); itrr != predicted.end(); itrr++) {
                 std::string key = "index-" + std::to_string(*itrr) + ".mh";
-                std::pair<int, string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(*itrr);
                 if (*itrr < mhIndices.size()) {
-//                    std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(itr->second.first, itr->second.second);
+                    std::pair<int, string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(*itrr);
+
                     std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(itr->second.first, itr->second.second);
                     std::cout << "Predictions for " << readKey << " key: " << key << " size: " << neighbours.size() << std::endl;
                     std::for_each(neighbours.begin(), neighbours.end(), [](Minhash::Neighbour a) {
