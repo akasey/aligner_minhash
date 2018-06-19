@@ -6,6 +6,7 @@
 #define ALIGNER_MINHASH_SAMWRITER_H
 
 #include <iostream>
+#include <math.h>
 #include "fastamm.h"
 #include "ssw_cpp.h"
 
@@ -25,18 +26,22 @@ public:
         }
     };
     struct Alignment {
-        std::string qname;
-        uint16_t flag;
-        std::string rname;
-        uint32_t pos;
-        uint8_t mapq;
-        std::string cigar;
-        std::string rnext;
-        uint32_t pnext;
-        int32_t tlen;
-        std::string seq;
-        std::string qual;
+        std::string qname = "*";
+        uint16_t flag = 0;
+        std::string rname = "*";
+        uint32_t pos = 0;
+        uint8_t mapq = 255;
+        std::string cigar = "*";
+        std::string rnext = "*";
+        uint32_t pnext = 0;
+        int32_t tlen = 0;
+        std::string seq = "*";
+        std::string qual = "*";
         // may be meta
+
+        void print(std::ostream &out) {
+            out << qname << " " << pos << " " << mapq << " " << cigar << std::endl;
+        }
     };
 
 private:
@@ -55,6 +60,7 @@ public:
     }
 
     void writeHeaders(std::string commandInvoked, FastaMM &fastamm);
+    int alignment(std::string &referenceSegment, std::string &read, Alignment *returnAlignment);
 
 };
 

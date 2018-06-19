@@ -42,7 +42,8 @@ public:
     ~TensorflowInference();
 //    TensorflowInference(const TensorflowInference &p2); // copy constructor
 
-    std::vector<std::set<int> > inference(Tensor);
+    // returns predictions for each row as set< pair<int,bool> >, meaning segment and strand(+|-). True means positive strand
+    std::vector<std::set<std::pair<int, bool> > > inference(Tensor);
     Tensor makeTensor(std::vector< std::pair<Kmer *, int> > pairs);
     int getOutputShape();
     int getInputShape();

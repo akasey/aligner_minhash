@@ -32,6 +32,54 @@ std::map<std::string, Minhash *> readIndices(std::vector<std::string> mhIndexLoc
     return mhIndices;
 }
 
+struct ReadsWrapper{
+    InputRead *read;
+    Kmer *kmer;
+    Kmer *revKmer;
+    int *totalKmers;
+    std::string *reverseRead;
+    std::set<std::pair<int, bool> > *predictedSegments;
+
+    void clear() {
+        if (read) delete read;
+        if (kmer) delete [] kmer;
+        if (revKmer) delete [] revKmer;
+        if (totalKmers) delete totalKmers;
+        if (reverseRead) delete reverseRead;
+        if (predictedSegments) delete predictedSegments;
+    }
+};
+
+inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrapper > &readsVector, std::vector< std::pair<Kmer *, int> > &pairs, int loadCount) {
+    Tensor tensor = inferEngine.makeTensor(pairs);
+    std::vector<std::set<std::pair<int, bool> > > predictions = inferEngine.inference(tensor);
+    for (int i=0; i<loadCount; i++) {
+        readsVector[i].predictedSegments = new std::set<std::pair<int, bool> >();
+        std::set<std::pair<int, bool> > inner = predictions[i];
+        for (std::set<std::pair<int, bool> >::iterator mnm=predictions[i].begin(); mnm != predictions[i].end(); mnm++) {
+            std::pair<int, bool> lacasito = *mnm;
+            readsVector[i].predictedSegments->insert(lacasito);
+        }
+    }
+    predictions.clear();
+}
+
+inline bool tryFirstOutofGiven(std::string &queryString, std::set<Minhash::Neighbour> &neighbours,
+                               std::pair<int, std::string> *referenceSegment, SamWriter &samWriter,SamWriter::Alignment *retAlignment, int *score) {
+    if (neighbours.size() > 0) {
+        Minhash::Neighbour first = *(neighbours.begin());
+        neighbours.erase(neighbours.begin());
+        int start = fmax((int)(first.id) - (int)(referenceSegment->first) - 10, 0);
+        int length = fmin(referenceSegment->second.length(), start+220) - start;
+        std::string partOfReference = referenceSegment->second.substr(start, length);
+        *score = samWriter.alignment(partOfReference, queryString, retAlignment);
+        if ( queryString.length()*0.8 <= *score ) { // atleast 80% matches
+            return true;
+        }
+    }
+    return false; // not happy with this alignment
+}
+
 int main(int argc, const char* argv[]) {
     std::string tfModelDir = "" ;
     std::string mhIndexDir = "" ;
@@ -109,42 +157,93 @@ int main(int argc, const char* argv[]) {
 
     FastQ fastq(fastqFile);
     while (fastq.hasNext()) {
-        std::map<std::string, std::pair<Kmer *, int> > readsMap;
+        std::vector<ReadsWrapper > readsVector(tfBatchSize);
         std::vector< std::pair<Kmer *, int> > pairs(tfBatchSize);
+        int loadCount = 0;
         for (int i=0; i<tfBatchSize && fastq.hasNext(); i++) {
-            InputRead read = fastq.next();
-            int totalKmers;
-            Kmer *kmers = encodeWindow(read.sequence, &totalKmers);
-            std::pair<Kmer *, int> onePair(kmers, totalKmers);
-            readsMap[read.key] = onePair;
+            ReadsWrapper readsWrapper;
+            readsWrapper.read = new InputRead(fastq.next());
+            int totalKmers = 0;
+            readsWrapper.kmer = encodeWindow((readsWrapper.read)->sequence, &totalKmers);
+            readsWrapper.totalKmers = new int(totalKmers);
+            readsVector[i] = readsWrapper;
+            std::pair<Kmer *, int> onePair(readsVector[i].kmer, totalKmers);
             pairs[i] = onePair;
+            loadCount++;
         }
 
-        Tensor tensor = inferEngine.makeTensor(pairs);
-        std::vector< std::set<int> > predictions = inferEngine.inference(tensor);
+        prediction(inferEngine, readsVector, pairs, loadCount);
 
-        int i=0;
-        for (std::map<std::string, std::pair<Kmer *, int> >::iterator itr=readsMap.begin(); itr != readsMap.end(); itr++) {
-            std::string readKey = itr->first;
-            std::set<int> predicted = predictions[i];
-            for (std::set<int>::iterator itrr = predicted.begin(); itrr != predicted.end(); itrr++) {
-                std::string key = "index-" + std::to_string(*itrr) + ".mh";
-                if (*itrr < mhIndices.size()) {
-                    std::pair<int, string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(*itrr);
+        for (int i=0; i<loadCount; i++) {
+            ReadsWrapper *currentRead = &(readsVector[i]);
+            std::set<Minhash::Neighbour> positiveNeighbours;
+            std::set<Minhash::Neighbour> negativeNeighbours;
+            SamWriter::Alignment bestAlignment;
+            int bestScore = -1 * (currentRead->read->sequence.length());
+            int score = 0;
 
-                    std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(itr->second.first, itr->second.second);
-                    std::cout << "Predictions for " << readKey << " key: " << key << " size: " << neighbours.size() << std::endl;
-                    std::for_each(neighbours.begin(), neighbours.end(), [](Minhash::Neighbour a) {
-                        std::cout << a.id << "(" << a.jaccard << "), ";
-                    });
-                    std::cout << std::endl;
+            for (std::set<std::pair<int, bool> >::iterator itrr = currentRead->predictedSegments->begin();
+                    itrr != currentRead->predictedSegments->end(); itrr++) {
+                std::pair<int, bool> pair = *itrr;
+                std::string key = "index-" + std::to_string(pair.first) + ".mh";
+                if (pair.first < mhIndices.size()) {
+                    std::pair<int, std::string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(pair.first);
+                    NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(pair.first) + " is NULL");
+
+                    std::set<Minhash::Neighbour> posNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->kmer, *(currentRead->totalKmers));
+
+                    SamWriter::Alignment alignment;
+                    bool happy = tryFirstOutofGiven(currentRead->read->sequence, posNeighboursCurrentPred, referenceSegment, samWriter, &alignment, &score);
+                    if (!happy) {
+                        positiveNeighbours.insert(posNeighboursCurrentPred.begin(), posNeighboursCurrentPred.end());
+                    }
+                    else {
+                        if (score > bestScore) {
+                            bestAlignment = alignment;
+                            bestScore = score;
+                        }
+                        continue;
+                    }
+
+
+                    // Also try first of reverse strand
+                    std::string reverse = reverseComplement(currentRead->read->sequence);
+                    currentRead->reverseRead = new std::string(reverse);
+                    int totalKmers = 0;
+                    currentRead->revKmer = encodeWindow(reverse, &totalKmers);
+
+                    SamWriter::Alignment negAlignment;
+                    std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
+                    happy = tryFirstOutofGiven(reverse, negNeighboursCurrentPred, referenceSegment, samWriter, &negAlignment, &score);
+                    if (!happy) {
+                        negativeNeighbours.insert(negNeighboursCurrentPred.begin(), negNeighboursCurrentPred.end());
+                    }
+                    else {
+                        if (score > bestScore) {
+                            bestAlignment = negAlignment;
+                            bestScore = score;
+                        }
+                        continue;
+                    }
+
                 }
                 else
-                    LOG(ERROR) << readKey << " predicted as " << std::to_string(*itrr);
+                    LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
             }
-            i++;
 
-            delete [] readsMap[readKey].first;
+
+            std::cout << "Predictions for " << currentRead->read->key << " size: " << ( positiveNeighbours.size()+negativeNeighbours.size() ) << std::endl;
+            bestAlignment.print(std::cout);
+//            for (std::set<Minhash::Neighbour>::iterator neighbour=neighbours.begin(); neighbour!=neighbours.end(); neighbour++){
+////                int start = fmax((int)(neighbour->id) - (int)(referenceSegment->first) - 10, 0);
+////                int length = fmin(referenceSegment->second.length(), start+220) - start;
+////                std::string partOfReference = referenceSegment->second.substr(start, length);
+//
+//                std::cout << (neighbour->id) << "(" << (neighbour->jaccard) << "), ";
+//            }
+//            std::cout << std::endl;
+
+//            currentRead->clear();
         }
     }
 

@@ -73,3 +73,28 @@ std::map<int, std::string> makeSlidingWindow(std::string &segment, int startLoca
     return windows;
 }
 
+/**
+ * Return reverse complement of given sequence
+ * @param sequence
+ * @return
+ */
+std::string reverseComplement(std::string sequence) {
+    std::transform(sequence.begin(), sequence.end(), sequence.begin(),
+            [](char n) {
+                switch(n) {
+                    case 'A':
+                        return 'T';
+                    case 'T':
+                        return 'A';
+                    case 'G':
+                        return 'C';
+                    case 'C':
+                        return 'G';
+                    default:
+                        return n;
+                }
+            });
+    std::reverse(sequence.begin(), sequence.end());
+    return sequence;
+}
+

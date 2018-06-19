@@ -11,6 +11,15 @@
 struct InputRead {
     std::string key;
     std::string sequence;
+
+    InputRead() {
+
+    }
+
+    InputRead(const InputRead &copy) {
+        key = copy.key;
+        sequence = copy.sequence;
+    }
 };
 
 struct InputReaderException : public std::exception {

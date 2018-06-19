@@ -29,3 +29,18 @@ void SamWriter::writeHeaders(std::vector <SamWriter::Header> &headers) {
         head.write(file);
     });
 }
+
+
+int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWriter::Alignment *returnAlignment) {
+    int32_t maskLen = strlen(read.c_str())/2;
+    maskLen = maskLen < 15 ? 15 : maskLen;
+    StripedSmithWaterman::Alignment alignment;
+    aligner.Align(read.c_str(), referenceSegment.c_str(), referenceSegment.size(), filter, &alignment, maskLen);
+
+    uint32_t mapq = -4.343 * log(1 - (double)abs(alignment.sw_score - alignment.sw_score_next_best)/(double)alignment.sw_score);
+    returnAlignment->mapq = (uint32_t) (mapq + 4.99);
+    returnAlignment->cigar = alignment.cigar_string;
+    returnAlignment->pos = alignment.ref_begin;
+
+    return (alignment.sw_score/2); // because match score is 2
+}
