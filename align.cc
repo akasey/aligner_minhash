@@ -12,6 +12,7 @@
 #include "include/fastaQ.h"
 #include "include/sam_writer.h"
 #include "include/indexer_jobparser.h"
+#include "include/priorityqueue_wrapper.h"
 
 
 void processArguments(int argc, const char *argv[]) {
@@ -175,9 +176,8 @@ int main(int argc, const char* argv[]) {
         prediction(inferEngine, readsVector, pairs, loadCount);
 
         for (int i=0; i<loadCount; i++) {
+            PriorityQueueWrapper queueWrapper;
             ReadsWrapper *currentRead = &(readsVector[i]);
-            std::set<Minhash::Neighbour> positiveNeighbours;
-            std::set<Minhash::Neighbour> negativeNeighbours;
             SamWriter::Alignment bestAlignment;
             int bestScore = -1 * (currentRead->read->sequence.length());
             int score = 0;
@@ -195,7 +195,7 @@ int main(int argc, const char* argv[]) {
                     SamWriter::Alignment alignment;
                     bool happy = tryFirstOutofGiven(currentRead->read->sequence, posNeighboursCurrentPred, referenceSegment, samWriter, &alignment, &score);
                     if (!happy) {
-                        positiveNeighbours.insert(posNeighboursCurrentPred.begin(), posNeighboursCurrentPred.end());
+                        queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
                     }
                     else {
                         if (score > bestScore) {
@@ -216,7 +216,7 @@ int main(int argc, const char* argv[]) {
                     std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
                     happy = tryFirstOutofGiven(reverse, negNeighboursCurrentPred, referenceSegment, samWriter, &negAlignment, &score);
                     if (!happy) {
-                        negativeNeighbours.insert(negNeighboursCurrentPred.begin(), negNeighboursCurrentPred.end());
+                        queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
                     }
                     else {
                         if (score > bestScore) {
@@ -231,19 +231,11 @@ int main(int argc, const char* argv[]) {
                     LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
             }
 
+            while(queueWrapper.hasNext()) {
+                int partition; bool forwardStrand; Minhash::Neighbour neighbour;
+                queueWrapper.pop(&partition, &forwardStrand, &neighbour);
 
-            std::cout << "Predictions for " << currentRead->read->key << " size: " << ( positiveNeighbours.size()+negativeNeighbours.size() ) << std::endl;
-            bestAlignment.print(std::cout);
-//            for (std::set<Minhash::Neighbour>::iterator neighbour=neighbours.begin(); neighbour!=neighbours.end(); neighbour++){
-////                int start = fmax((int)(neighbour->id) - (int)(referenceSegment->first) - 10, 0);
-////                int length = fmin(referenceSegment->second.length(), start+220) - start;
-////                std::string partOfReference = referenceSegment->second.substr(start, length);
-//
-//                std::cout << (neighbour->id) << "(" << (neighbour->jaccard) << "), ";
-//            }
-//            std::cout << std::endl;
-
-//            currentRead->clear();
+            }
         }
     }
 
