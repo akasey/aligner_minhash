@@ -19,18 +19,16 @@ void processArguments(int argc, const char *argv[]) {
 
 }
 
-std::map<std::string, Minhash *> readIndices(std::vector<std::string> mhIndexLocations, int nThreads) {
-    std::map<std::string, Minhash *> mhIndices;
+void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::map<std::string, Minhash *> *mhIndices) {
     ThreadPool threadPool(nThreads);
     for (int i = 0; i < mhIndexLocations.size(); i++) {
         std::string filename = mhIndexLocations[i];
         std::string basefname = basename(filename);
-        mhIndices[basefname] = new Minhash();
+        (*mhIndices)[basefname] = new Minhash();
         threadPool.enqueue([i, filename, &mhIndices, basefname] {
-            mhIndices[basefname]->deserialize(filename);
+            (*mhIndices)[basefname]->deserialize(filename);
         });
     }
-    return mhIndices;
 }
 
 struct ReadsWrapper{
@@ -63,6 +61,31 @@ inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrappe
         }
     }
     predictions.clear();
+}
+
+inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
+                                  int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge, Minhash::Neighbour &neighbour,
+                                  SamWriter::Alignment *retAlignment, int *score) {
+    std::pair<int, std::string> *referenceSegment = refBridge->getSegmentForID(predictedSegment);
+    NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(predictedSegment) + " is NULL");
+    int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - 10, 0);
+    int length = fmin(referenceSegment->second.length(), start+220) - start;
+    std::string partOfReference = referenceSegment->second.substr(start, length);
+    std::string queryString = forwardStrand ? currentRead->read->sequence : *(currentRead->reverseRead);
+    *score = SamWriter::alignment(partOfReference, queryString, retAlignment);
+
+    bool happy;
+    retAlignment->qname = currentRead->read->key;
+    retAlignment->seq = "ABAJSDFJAS";
+    if ( queryString.length()*0.8 <= *score) { // consider mapped
+        happy = true;
+        retAlignment->flag = retAlignment->flag | (forwardStrand ? 0 : REVERSE_MAPPED);
+    }
+    else {
+        happy = false;
+        retAlignment->flag = retAlignment->flag | SEGMENT_UNMAPPED;
+    }
+    return happy;
 }
 
 inline bool tryFirstOutofGiven(std::string &queryString, std::set<Minhash::Neighbour> &neighbours,
@@ -102,7 +125,7 @@ int main(int argc, const char* argv[]) {
             ("i,minhash_dir", "Directory where all index-xx.mh files are located", cxxopts::value<std::string>(mhIndexDir), "Minhash index dir")
             ("r,genome_dir", "Directory where sequence.fasta, classify_detail.log are located", cxxopts::value<std::string>(referenceGenomeDir), "Reference genome dir")
             ("f,fastq", "Input FastQ file for aligning", cxxopts::value<std::string>(fastqFile), "FastQ file")
-            ("o,output", "Output SamFile", cxxopts::value<std::string>(fastqFile), "Sam file");
+            ("o,output", "Output SamFile", cxxopts::value<std::string>(samFile), "Sam file");
 
 
     std::vector<cxxopts::KeyValue> arguments;
@@ -148,7 +171,8 @@ int main(int argc, const char* argv[]) {
 
 
     LOG(INFO) << "Reading in minhash indices...";
-    std::map<std::string, Minhash *> mhIndices = readIndices(indices, nThreads);
+    std::map<std::string, Minhash *> mhIndices;
+    readIndices(indices, nThreads, &mhIndices);
 
 /*    for (int i =0; i<indices.size(); i++) {
         std::string base = basename(indices[i]);
@@ -197,11 +221,9 @@ int main(int argc, const char* argv[]) {
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
                     }
-                    else {
-                        if (score > bestScore) {
-                            bestAlignment = alignment;
-                            bestScore = score;
-                        }
+                    else if (score > bestScore) {
+                        bestAlignment = alignment;
+                        bestScore = score;
                         continue;
                     }
 
@@ -234,7 +256,8 @@ int main(int argc, const char* argv[]) {
             while(queueWrapper.hasNext()) {
                 int partition; bool forwardStrand; Minhash::Neighbour neighbour;
                 queueWrapper.pop(&partition, &forwardStrand, &neighbour);
-
+                SamWriter::Alignment retAlignment; int retScore;
+                bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, &retAlignment, &retScore);
             }
         }
     }

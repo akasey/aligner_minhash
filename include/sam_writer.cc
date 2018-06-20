@@ -4,6 +4,11 @@
 
 #include "sam_writer.h"
 
+
+// Static variables definition
+StripedSmithWaterman::Aligner SamWriter::aligner;
+StripedSmithWaterman::Filter SamWriter::filter;
+
 SamWriter::SamWriter(Mode m, std::string filename) : mode(m) {
     file.open(filename);
 }

@@ -10,6 +10,13 @@
 #include "fastamm.h"
 #include "ssw_cpp.h"
 
+#define PAIRED_READ 1
+#define EACH_ALIGNED 2
+#define SEGMENT_UNMAPPED 4
+#define REVERSE_MAPPED 16
+
+
+
 class SamWriter {
 public:
     enum Mode {PAIRED, SINGLE};
@@ -47,8 +54,8 @@ public:
 private:
     Mode mode;
     std::ofstream file;
-    StripedSmithWaterman::Aligner aligner;
-    StripedSmithWaterman::Filter filter;
+    static StripedSmithWaterman::Aligner aligner;
+    static StripedSmithWaterman::Filter filter;
 
     void writeHeaders(std::vector<Header> &headers);
 
@@ -60,7 +67,7 @@ public:
     }
 
     void writeHeaders(std::string commandInvoked, FastaMM &fastamm);
-    int alignment(std::string &referenceSegment, std::string &read, Alignment *returnAlignment);
+    static int alignment(std::string &referenceSegment, std::string &read, Alignment *returnAlignment);
 
 };
 
