@@ -49,3 +49,18 @@ int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWr
 
     return (alignment.sw_score/2); // because match score is 2
 }
+
+void SamWriter::writeAlignment(Alignment &alignment) {
+    file << alignment.qname << "\t"
+        << unsigned(alignment.flag) << "\t"
+        << alignment.rname << "\t"
+        << unsigned(alignment.pos) << "\t"
+        << unsigned(alignment.mapq) << "\t"
+        << alignment.cigar << "\t"
+        << alignment.rnext << "\t"
+        << unsigned(alignment.pnext) << "\t"
+        << alignment.tlen << "\t"
+        << alignment.seq << "\t"
+        << alignment.qual << "\n";
+    file.flush();
+}

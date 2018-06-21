@@ -67,6 +67,7 @@ public:
     }
 
     void writeHeaders(std::string commandInvoked, FastaMM &fastamm);
+    void writeAlignment(Alignment &alignment);
     static int alignment(std::string &referenceSegment, std::string &read, Alignment *returnAlignment);
 
 };

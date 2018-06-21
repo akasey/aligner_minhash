@@ -30,7 +30,7 @@ private:
     };
 
     std::map<std::string, std::string> meta;
-    std::vector<Segment> segments;
+    std::map<int, Segment> segments; // segmentID to Segments
     std::string directory;
     std::map<int, std::pair<int, std::string>> classificationJob; // segmentID -> (start location, sequence)
 
@@ -61,7 +61,7 @@ public:
 
     Iterator makeJobIterator();
     std::pair<int, std::string> * getSegmentForID(int id);
-
+    std::string segIdToKey(int segId);
 
 };
 

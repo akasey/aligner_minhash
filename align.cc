@@ -76,7 +76,11 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 
     bool happy;
     retAlignment->qname = currentRead->read->key;
+    std::string segmentName = refBridge->segIdToKey(predictedSegment);
+//    if (segmentName.empty()) throw
+    retAlignment->rname = split(segmentName, " ")[0];
     retAlignment->seq = "ABAJSDFJAS";
+    retAlignment->pos = retAlignment->pos + start + referenceSegment->first;
     if ( queryString.length()*0.8 <= *score) { // consider mapped
         happy = true;
         retAlignment->flag = retAlignment->flag | (forwardStrand ? 0 : REVERSE_MAPPED);
@@ -88,20 +92,22 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
     return happy;
 }
 
-inline bool tryFirstOutofGiven(std::string &queryString, std::set<Minhash::Neighbour> &neighbours,
-                               std::pair<int, std::string> *referenceSegment, SamWriter &samWriter,SamWriter::Alignment *retAlignment, int *score) {
+inline bool tryFirstOutofGiven(ReadsWrapper *currentRead, int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge,
+                               std::set<Minhash::Neighbour> &neighbours, SamWriter::Alignment *retAlignment, int *score) {
     if (neighbours.size() > 0) {
         Minhash::Neighbour first = *(neighbours.begin());
         neighbours.erase(neighbours.begin());
-        int start = fmax((int)(first.id) - (int)(referenceSegment->first) - 10, 0);
-        int length = fmin(referenceSegment->second.length(), start+220) - start;
-        std::string partOfReference = referenceSegment->second.substr(start, length);
-        *score = samWriter.alignment(partOfReference, queryString, retAlignment);
-        if ( queryString.length()*0.8 <= *score ) { // atleast 80% matches
+        alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, retAlignment, score);
+        if ( currentRead->read->sequence.length()*0.8 <= *score ) { // atleast 80% matches
             return true;
         }
     }
     return false; // not happy with this alignment
+}
+
+inline void makeUnmapped(ReadsWrapper *currentRead, SamWriter::Alignment &retAlignment) {
+    retAlignment.qname = currentRead->read->key;
+    retAlignment.flag = retAlignment.flag | SEGMENT_UNMAPPED;
 }
 
 int main(int argc, const char* argv[]) {
@@ -111,7 +117,7 @@ int main(int argc, const char* argv[]) {
     std::string fastqFile = "" ;
     std::string samFile = "";
     int nThreads = 4;
-    int tfBatchSize = 1;
+    int tfBatchSize = 1000;
 
     std::string wholeCommand = "";
     for (int i=0; i<argc; i++) {
@@ -211,13 +217,13 @@ int main(int argc, const char* argv[]) {
                 std::pair<int, bool> pair = *itrr;
                 std::string key = "index-" + std::to_string(pair.first) + ".mh";
                 if (pair.first < mhIndices.size()) {
-                    std::pair<int, std::string> *referenceSegment = referenceGenomeBrigde.getSegmentForID(pair.first);
-                    NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(pair.first) + " is NULL");
+                    int partition = pair.first;
 
                     std::set<Minhash::Neighbour> posNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->kmer, *(currentRead->totalKmers));
 
                     SamWriter::Alignment alignment;
-                    bool happy = tryFirstOutofGiven(currentRead->read->sequence, posNeighboursCurrentPred, referenceSegment, samWriter, &alignment, &score);
+                    bool forwardStrand = true;
+                    bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred, &alignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
                     }
@@ -233,10 +239,11 @@ int main(int argc, const char* argv[]) {
                     currentRead->reverseRead = new std::string(reverse);
                     int totalKmers = 0;
                     currentRead->revKmer = encodeWindow(reverse, &totalKmers);
+                    forwardStrand = false;
 
                     SamWriter::Alignment negAlignment;
                     std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
-                    happy = tryFirstOutofGiven(reverse, negNeighboursCurrentPred, referenceSegment, samWriter, &negAlignment, &score);
+                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &alignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
                     }
@@ -249,8 +256,9 @@ int main(int argc, const char* argv[]) {
                     }
 
                 }
-                else
-                    LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
+                else {
+                 //   LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
+                }
             }
 
             while(queueWrapper.hasNext()) {
@@ -258,8 +266,18 @@ int main(int argc, const char* argv[]) {
                 queueWrapper.pop(&partition, &forwardStrand, &neighbour);
                 SamWriter::Alignment retAlignment; int retScore;
                 bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, &retAlignment, &retScore);
+                if (happy && retScore > bestScore) {
+                    bestAlignment = retAlignment;
+                    bestScore = score;
+                }
             }
+            if ( bestAlignment.qname.compare("*")==0 ) { // means no mapping found
+                makeUnmapped(currentRead, bestAlignment);
+            }
+            samWriter.writeAlignment(bestAlignment);
         }
+
+        LOG(INFO) << loadCount << " finished..";
     }
 
 

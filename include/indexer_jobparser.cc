@@ -47,18 +47,19 @@ void IndexerJobParser::readSegmentDescription(std::ifstream &fin) {
         segment.key = tokens[1];
         segment.start = stoi(tokens[2]);
         segment.end = stoi(tokens[3]);
-        segments.push_back(segment);
+        segments[segment.segID] = segment;
     }
 }
 
 void IndexerJobParser::prepareClassificationJob(FastaMM *fasta) {
     classificationJob.clear();
-    for (std::vector<Segment>::iterator itr=segments.begin(); itr!=segments.end(); itr++) {
-        std::string * sequence = fasta->getGenomePart(itr->key);
+    for (std::map<int, Segment>::iterator itr=segments.begin(); itr!=segments.end(); itr++) {
+        Segment segment = itr->second;
+        std::string * sequence = fasta->getGenomePart(segment.key);
         if (!sequence)
-            throw ElementNotFoundException(itr->key);
-        std::string segment = sequence->substr(itr->start, (itr->end-itr->start) );
-        classificationJob[itr->segID] = std::pair<int, std::string>(itr->start, segment);
+            throw ElementNotFoundException(segment.key);
+        std::string nucSegment = sequence->substr(segment.start, (segment.end-segment.start) );
+        classificationJob[segment.segID] = std::pair<int, std::string>(segment.start, nucSegment);
     }
 };
 
@@ -108,3 +109,11 @@ std::pair<const int, std::pair<int, std::string>> IndexerJobParser::Iterator::ne
     return element;
 
 };
+
+std::string IndexerJobParser::segIdToKey(int segId) {
+    std::map<int, IndexerJobParser::Segment>::iterator found = segments.find(segId);
+    if (found != segments.end()) {
+        return found->second.key;
+    }
+    return "";
+}
