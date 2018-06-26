@@ -8,6 +8,7 @@
 #include <iostream>
 #include <math.h>
 #include "fastamm.h"
+#include "ssw.h"
 #include "ssw_cpp.h"
 
 #define PAIRED_READ 1

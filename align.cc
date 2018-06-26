@@ -79,7 +79,6 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
     std::string segmentName = refBridge->segIdToKey(predictedSegment);
 //    if (segmentName.empty()) throw
     retAlignment->rname = split(segmentName, " ")[0];
-    retAlignment->seq = "ABAJSDFJAS";
     retAlignment->pos = retAlignment->pos + start + referenceSegment->first;
     if ( queryString.length()*0.8 <= *score) { // consider mapped
         happy = true;
@@ -243,7 +242,7 @@ int main(int argc, const char* argv[]) {
 
                     SamWriter::Alignment negAlignment;
                     std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
-                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &alignment, &score);
+                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
                     }
