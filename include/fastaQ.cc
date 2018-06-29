@@ -22,6 +22,7 @@ InputRead FastQ::next() {
         switch (linenum) {
             case 0:
                 read.key = trim(line);
+                std::replace(read.key.begin(), read.key.end(), '@', '');
                 break;
             case 1:
                 read.sequence = trim(line);
