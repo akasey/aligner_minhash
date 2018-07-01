@@ -2,7 +2,7 @@
 // Created by Akash Shrestha on 5/10/18.
 //
 
-#include <sam_writer.h>
+#include "include/sam_writer.h"
 #include "include/cxxopts.h"
 #include "include/common.h"
 #include "include/minhash.h"
