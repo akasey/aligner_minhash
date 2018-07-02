@@ -8,6 +8,7 @@
 #include <string>
 #include <cmath>
 #include <map>
+#include <algorithm>
 
 #define KMER_K 7
 

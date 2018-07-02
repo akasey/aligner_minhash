@@ -32,6 +32,8 @@ target_link_libraries(aligner SswCC::Static)
 add_executable(minhash_test tests/MinhashTest.cc include/minhash.cc include/common.cc include/kmer.cc
         dependencies/ssw/src/ssw_cpp.cpp dependencies/ssw/src/ssw.c)
 target_link_libraries(minhash_test SswCC::Static)
+target_link_libraries(minhash_test ${CMAKE_THREAD_LIBS_INIT})
+
 add_executable(fastq_test tests/FastaQTest.cc include/common.cc include/fastaQ.cc include/input_reader.cc)
 
 add_executable(inference_test tests/TensorflowInferenceTest.cc include/minhash.cc include/common.cc include/kmer.cc include/tensorflow_inference.cc include/tf_metaparser.cc)

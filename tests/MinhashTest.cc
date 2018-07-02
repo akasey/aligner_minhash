@@ -53,7 +53,8 @@ void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::m
 
 int main(int argc, char *argv[]) {
     LOG(INFO) << "Reading in minhash indices...";
-    std::string mhIndexDir = "/Users/akash/PycharmProjects/aligner/sample_classification_run/indices" ;
+//    std::string mhIndexDir = "/Users/akash/PycharmProjects/aligner/sample_classification_run/indices" ;
+    std::string mhIndexDir = "/Users/akash/ClionProjects/aligner_minhash/cmake-build-debug/ecoli/indices" ;
     int nThreads = 4;
     std::map<std::string, Minhash *> mhIndices;
     std::vector<std::string> indices = getFilesInDirectory(mhIndexDir, ".mh");
