@@ -32,7 +32,7 @@ target_link_libraries(aligner ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(aligner SswCC::Static)
 
 
-add_executable(minhash_test tests/MinhashTest.cc include/minhash.cc include/common.cc include/kmer.cc
+add_executable(minhash_test tests/MinhashTest.cc include/minhash.cc include/common.cc include/kmer.cc include/fastamm.cc include/indexer_jobparser.cc
         dependencies/ssw/src/ssw_cpp.cpp dependencies/ssw/src/ssw.c)
 target_link_libraries(minhash_test SswCC::Static)
 target_link_libraries(minhash_test ${CMAKE_THREAD_LIBS_INIT})

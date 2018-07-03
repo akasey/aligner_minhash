@@ -10,7 +10,7 @@
 #include "include/ThreadPool.h"
 
 int createEachMinhashIndex(std::string &baseDirectory, const int segId, std::pair<int, std::string> &segmentPair, int windowLen) {
-    int strides = 2;//KMER_K -1;
+    int strides = KMER_K -1;
     Minhash mh;
     int startingPoint = segmentPair.first;
     std::map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
