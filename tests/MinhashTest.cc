@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include "../include/cxxopts.h"
 #include "../include/ThreadPool.h"
 #include "../include/minhash.h"
 
@@ -51,11 +52,23 @@ void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::m
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char * argv[]) {
+    std::string baseDirectory = "" ;
+    int nThreads = 5;
+    cxxopts::Options options("Minhash Indexer", "Create the minhash index for after classification.");
+    options.add_options()
+            ("d,dir", "Directory where sequence.fasta and classify_detail.log are placed.", cxxopts::value<std::string>(baseDirectory)->default_value("./"), "Base directory")
+            ("t,threads", "No. of threads", cxxopts::value<int>(nThreads), "Num Threads");
+    if (argc <= 1){
+        std::cerr << options.help() << std::endl;
+        exit(-1);
+    }
+    auto result = options.parse(argc, argv);
+
     LOG(INFO) << "Reading in minhash indices...";
 //    std::string mhIndexDir = "/Users/akash/PycharmProjects/aligner/sample_classification_run/indices" ;
-    std::string mhIndexDir = "/Users/akash/ClionProjects/aligner_minhash/cmake-build-debug/ecoli/indices" ;
-    int nThreads = 4;
+    std::string mhIndexDir = baseDirectory ;
+
     std::map<std::string, Minhash *> mhIndices;
     std::vector<std::string> indices = getFilesInDirectory(mhIndexDir, ".mh");
     readIndices(indices, nThreads, &mhIndices);
