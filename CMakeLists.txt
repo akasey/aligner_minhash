@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.8)
 project(aligner_minhash)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG_MODE=1")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DDEBUG_MODE=0")
+
 # tensorflow package
 set(TensorflowCC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tf-standalone/")
 find_package(TensorflowCC REQUIRED)

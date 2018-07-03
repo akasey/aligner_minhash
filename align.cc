@@ -80,6 +80,9 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 //    if (segmentName.empty()) throw
     retAlignment->rname = split(segmentName, " ")[0];
     retAlignment->pos = retAlignment->pos + start + referenceSegment->first;
+#if DEBUG
+    LOG(INFO) << "Alignment score: " << *score << " Happy threshold: " << queryString.length()*0.8;
+#endif
     if ( queryString.length()*0.8 <= *score) { // consider mapped
         happy = true;
         retAlignment->flag = retAlignment->flag | (forwardStrand ? 0 : REVERSE_MAPPED);
@@ -219,7 +222,9 @@ int main(int argc, const char* argv[]) {
                     int partition = pair.first;
 
                     std::set<Minhash::Neighbour> posNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->kmer, *(currentRead->totalKmers));
-
+#if DEBUG_MODE
+                    LOG(INFO) << "+ve Minhash Neigbours: " << posNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
+#endif
                     SamWriter::Alignment alignment;
                     bool forwardStrand = true;
                     bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred, &alignment, &score);
@@ -242,6 +247,9 @@ int main(int argc, const char* argv[]) {
 
                     SamWriter::Alignment negAlignment;
                     std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
+#if DEBUG_MODE
+                    LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
+#endif
                     happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
