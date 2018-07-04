@@ -50,17 +50,23 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
     LOG(INFO) << "WindowLength " << windowLength << "....";
 
     try {
+#if THREADS_ENABLE
         ThreadPool threadPool(nThreads);
         std::vector< std::future<int> > results;
+#endif
         jobParser.prepareClassificationJob(&fasta);
         IndexerJobParser::Iterator iterator = jobParser.makeJobIterator();
         while(iterator.hasNext()) {
             std::pair<const int, std::pair<int, std::string>> itr = iterator.next();
             int segId = itr.first;
             std::pair<int, std::string> segmentPair = itr.second;
+#if THREADS_ENABLE
             results.emplace_back(
                 threadPool.enqueue(createEachMinhashIndex, baseDirectory, segId, segmentPair, windowLength)
             );
+#else
+            createEachMinhashIndex(baseDirectory, segId, segmentPair, windowLength);
+#endif
         }
     }
     catch (ElementNotFoundException &e){

@@ -110,23 +110,37 @@ void createIndices(std::string &baseDirectory, int nThreads) {
 }
 
 
+#if THREADS_ENABLE
 void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::map<std::string, Minhash *> *mhIndices) {
-    ThreadPool threadPool(nThreads);
-    std::mutex mtx;
-    for (int i = 0; i < mhIndexLocations.size(); i++) {
-        threadPool.enqueue([i, &mhIndices, &mhIndexLocations, &mtx] {
-            std::unique_lock<std::mutex> guard(mtx);
+    std::map<std::string, std::future<Minhash *> > mhThreadResults;
+    {
+        ThreadPool threadPool(nThreads);
+        for (int i = 0; i < mhIndexLocations.size(); i++) {
             std::string filename = mhIndexLocations[i];
-            guard.unlock();
             std::string basefname = basename(filename);
-            Minhash *mh = new Minhash();
-            mh->deserialize(filename);
-            guard.lock();
-            (*mhIndices)[basefname] = mh;
-            guard.unlock();
-        });
+            mhThreadResults[basefname] = threadPool.enqueue([i, filename] {
+                Minhash *mh = new Minhash();
+                mh->deserialize(filename);
+                return mh;
+            });
+        }
+    } // end of parallelization
+
+    for (std::map<std::string, std::future<Minhash *> >::iterator itr=mhThreadResults.begin(); itr!=mhThreadResults.end(); itr++) {
+        (*mhIndices)[itr->first] = itr->second.get();
     }
 }
+#else
+void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::map<std::string, Minhash *> *mhIndices) {
+    for (int i = 0; i < mhIndexLocations.size(); i++) {
+        std::string filename = mhIndexLocations[i];
+        std::string basefname = basename(filename);
+        Minhash *mh = new Minhash();
+        mh->deserialize(filename);
+        (*mhIndices)[basefname] = mh;
+    }
+}
+#endif
 
 int main(int argc, const char * argv[]) {
     std::string baseDirectory = "" ;
@@ -142,10 +156,6 @@ int main(int argc, const char * argv[]) {
     auto result = options.parse(argc, argv);
 
     LOG(INFO) << "Reading in minhash indices...";
-//    std::string mhIndexDir = "/Users/akash/PycharmProjects/aligner/sample_classification_run/indices" ;
-
-//    createIndices(baseDirectory, nThreads);
-
 
     std::string mhIndexDir = baseDirectory;
     std::map<std::string, Minhash *> mhIndices;
