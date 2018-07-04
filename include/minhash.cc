@@ -29,6 +29,8 @@ BandhashVar hashBand(shingleVar* minhash, int length) {
 }
 #endif
 
+std::mutex Minhash::mutex;
+
 void Minhash::init() {
     for (int i=0;i<totalBands; i++) {
         index.push_back(new std::map<BandhashVar, std::set<DocID> >());
@@ -138,7 +140,9 @@ void Minhash::addDocument(DocID id, std::string sequence) {
 void Minhash::addDocument(DocID id, Kmer *shingles, int totalShingles) {
     std::map<Kmer,int> shinglesWithFreq = frequencifyShingles(shingles, totalShingles);
 
+    mutex.lock();
     Kmer* minhash = computeMinHash(shinglesWithFreq);
+    mutex.unlock();
     BandhashVar* bandhashes = computeBandHash(minhash);
 
     for(int i=0; i<totalBands; i++) {
@@ -152,6 +156,7 @@ void Minhash::addDocument(DocID id, Kmer *shingles, int totalShingles) {
             (*index[i])[bandhashes[i]].insert(id);
         }
     }
+    std::cout << "[" << id << "]Map size: " << index[0]->size() << std::endl;
 
 #if MINHASH_STORAGE
     minhashStorage[id] = minhash;

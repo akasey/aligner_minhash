@@ -39,6 +39,7 @@ private:
     std::map<DocID ,Kmer *> minhashStorage;
 #endif
     std::vector<std::map<BandhashVar, std::set<DocID > > *> index;
+    static std::mutex mutex;
 
     void init();
     void deinit();

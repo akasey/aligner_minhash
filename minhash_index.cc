@@ -9,13 +9,15 @@
 #include "include/minhash.h"
 #include "include/ThreadPool.h"
 
-int createEachMinhashIndex(std::string &baseDirectory, const int segId, std::pair<int, std::string> &segmentPair, int windowLen) {
+int createEachMinhashIndex(std::string baseDirectory, const int segId, std::pair<int, std::string> segmentPair, int windowLen) {
     int strides = KMER_K -1;
     Minhash mh;
     int startingPoint = segmentPair.first;
     std::map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
+    int counter = 0;
     for (std::map<int, std::string>::iterator itr=slidingWindows.begin(); itr!=slidingWindows.end(); itr++) {
         mh.addDocument(itr->first, itr->second);
+        counter++;
     }
     std::string filename = baseDirectory +"/indices/index-" + std::to_string(segId) + ".mh";
     FILE *stream = fopen(filename.c_str(), "wb");
@@ -61,9 +63,9 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
             int segId = itr.first;
             std::pair<int, std::string> segmentPair = itr.second;
 #if THREADS_ENABLE
-            results.emplace_back(
-                threadPool.enqueue(createEachMinhashIndex, baseDirectory, segId, segmentPair, windowLength)
-            );
+            threadPool.enqueue([baseDirectory, segId, segmentPair, windowLength] {
+                createEachMinhashIndex(baseDirectory, segId, segmentPair, windowLength);
+            });
 #else
             createEachMinhashIndex(baseDirectory, segId, segmentPair, windowLength);
 #endif
