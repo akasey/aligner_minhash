@@ -84,12 +84,12 @@ inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrappe
 }
 
 inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
-                                  int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge, Minhash::Neighbour &neighbour,
+                                  int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge, Minhash::Neighbour &neighbour, int windowLength,
                                   SamWriter::Alignment *retAlignment, int *score) {
     std::pair<int, std::string> *referenceSegment = refBridge->getSegmentForID(predictedSegment);
     NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(predictedSegment) + " is NULL");
     int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - 10, 0);
-    int length = fmin(referenceSegment->second.length(), start+220) - start;
+    int length = fmin(referenceSegment->second.length(), start+20+windowLength) - start;
     std::string partOfReference = referenceSegment->second.substr(start, length);
     std::string queryString = forwardStrand ? currentRead->read->sequence : *(currentRead->reverseRead);
     *score = SamWriter::alignment(partOfReference, queryString, retAlignment);
@@ -100,7 +100,7 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 //    if (segmentName.empty()) throw
     retAlignment->rname = split(segmentName, " ")[0];
     retAlignment->pos = retAlignment->pos + start + referenceSegment->first;
-#if DEBUG
+#if DEBUG_MODE
     LOG(INFO) << "Alignment score: " << *score << " Happy threshold: " << queryString.length()*0.8;
 #endif
     if ( queryString.length()*0.8 <= *score) { // consider mapped
@@ -115,11 +115,11 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 }
 
 inline bool tryFirstOutofGiven(ReadsWrapper *currentRead, int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge,
-                               std::set<Minhash::Neighbour> &neighbours, SamWriter::Alignment *retAlignment, int *score) {
+                               std::set<Minhash::Neighbour> &neighbours, int windowLength, SamWriter::Alignment *retAlignment, int *score) {
     if (neighbours.size() > 0) {
         Minhash::Neighbour first = *(neighbours.begin());
         neighbours.erase(neighbours.begin());
-        alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, retAlignment, score);
+        alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, windowLength, retAlignment, score);
         if ( currentRead->read->sequence.length()*0.8 <= *score ) { // atleast 80% matches
             return true;
         }
@@ -247,7 +247,8 @@ int main(int argc, const char* argv[]) {
 #endif
                     SamWriter::Alignment alignment;
                     bool forwardStrand = true;
-                    bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred, &alignment, &score);
+                    bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
+                            referenceGenomeBrigde.getWindowLength(), &alignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
                     }
@@ -270,7 +271,8 @@ int main(int argc, const char* argv[]) {
 #if DEBUG_MODE
                     LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
 #endif
-                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score);
+                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred,
+                            referenceGenomeBrigde.getWindowLength(), &negAlignment, &score);
                     if (!happy) {
                         queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
                     }
@@ -283,16 +285,19 @@ int main(int argc, const char* argv[]) {
                     }
 
                 }
+#if DEBUG_MODE
                 else {
-                 //   LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
+                    LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
                 }
+#endif
             }
 
             while(queueWrapper.hasNext()) {
                 int partition; bool forwardStrand; Minhash::Neighbour neighbour;
                 queueWrapper.pop(&partition, &forwardStrand, &neighbour);
                 SamWriter::Alignment retAlignment; int retScore;
-                bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, &retAlignment, &retScore);
+                bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, referenceGenomeBrigde.getWindowLength(),
+                        &retAlignment, &retScore);
                 if (happy && retScore > bestScore) {
                     bestAlignment = retAlignment;
                     bestScore = score;
