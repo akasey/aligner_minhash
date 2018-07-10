@@ -9,15 +9,13 @@
 #include "include/minhash.h"
 #include "include/ThreadPool.h"
 
-int createEachMinhashIndex(std::string baseDirectory, const int segId, std::pair<int, std::string> segmentPair, int windowLen) {
+void createEachMinhashIndex(std::string baseDirectory, const int segId, std::pair<int, std::string> segmentPair, int windowLen) {
     int strides = KMER_K -1;
-    Minhash mh;
     int startingPoint = segmentPair.first;
     std::map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
-    int counter = 0;
+    Minhash mh;
     for (std::map<int, std::string>::iterator itr=slidingWindows.begin(); itr!=slidingWindows.end(); itr++) {
         mh.addDocument(itr->first, itr->second);
-        counter++;
     }
     std::string filename = baseDirectory +"/indices/index-" + std::to_string(segId) + ".mh";
     FILE *stream = fopen(filename.c_str(), "wb");
@@ -34,7 +32,6 @@ int createEachMinhashIndex(std::string baseDirectory, const int segId, std::pair
     mh.serialize(stream);
     fclose(stream);
     LOG(INFO) << segId << " indexing complete..";
-    return 0;
 }
 
 void mainStuffs(std::string &baseDirectory, int nThreads) {
@@ -54,7 +51,6 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
     try {
 #if THREADS_ENABLE
         ThreadPool threadPool(nThreads);
-        std::vector< std::future<int> > results;
 #endif
         jobParser.prepareClassificationJob(&fasta);
         IndexerJobParser::Iterator iterator = jobParser.makeJobIterator();

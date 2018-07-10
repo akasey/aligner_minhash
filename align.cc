@@ -19,17 +19,37 @@ void processArguments(int argc, const char *argv[]) {
 
 }
 
+#if THREADS_ENABLE
 void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::map<std::string, Minhash *> *mhIndices) {
-    ThreadPool threadPool(nThreads);
+    std::map<std::string, std::future<Minhash *> > mhThreadResults;
+    {
+        ThreadPool threadPool(nThreads);
+        for (int i = 0; i < mhIndexLocations.size(); i++) {
+            std::string filename = mhIndexLocations[i];
+            std::string basefname = basename(filename);
+            mhThreadResults[basefname] = threadPool.enqueue([i, filename] {
+                Minhash *mh = new Minhash();
+                mh->deserialize(filename);
+                return mh;
+            });
+        }
+    } // end of parallelization
+
+    for (std::map<std::string, std::future<Minhash *> >::iterator itr=mhThreadResults.begin(); itr!=mhThreadResults.end(); itr++) {
+        (*mhIndices)[itr->first] = itr->second.get();
+    }
+}
+#else
+void readIndices(std::vector<std::string> mhIndexLocations, int nThreads, std::map<std::string, Minhash *> *mhIndices) {
     for (int i = 0; i < mhIndexLocations.size(); i++) {
         std::string filename = mhIndexLocations[i];
         std::string basefname = basename(filename);
-        (*mhIndices)[basefname] = new Minhash();
-        threadPool.enqueue([i, filename, &mhIndices, basefname] {
-            (*mhIndices)[basefname]->deserialize(filename);
-        });
+        Minhash *mh = new Minhash();
+        mh->deserialize(filename);
+        (*mhIndices)[basefname] = mh;
     }
 }
+#endif
 
 struct ReadsWrapper{
     InputRead *read;

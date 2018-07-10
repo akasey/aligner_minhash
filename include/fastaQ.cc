@@ -6,6 +6,9 @@
 
 bool FastQ::hasNext() {
     int len = inStream.tellg();
+    if (len < 0)
+        return false;
+
     std::string line;
     int linenum = 0;
     for (;linenum<4 && !inStream.eof();linenum++)

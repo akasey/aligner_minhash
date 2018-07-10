@@ -45,6 +45,7 @@ void IndexerJobParser::readSegmentDescription(std::ifstream &fin) {
         Segment segment;
         segment.segID = stoi(tokens[0]);
         segment.key = tokens[1];
+        segment.key.erase(std::remove(segment.key.begin(), segment.key.end(), '>'), segment.key.end());
         segment.start = stoi(tokens[2]);
         segment.end = stoi(tokens[3]);
         segments[segment.segID] = segment;

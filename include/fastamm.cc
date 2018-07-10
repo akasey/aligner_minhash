@@ -17,6 +17,7 @@ void FastaMM::readGenome() {
         trim(line);
         if (line[0] == '>') {
             key = line;
+            key.erase(std::remove(key.begin(), key.end(), '>'), key.end());
             genomeDict[key] = "";
             genomeLengthMeta[key] = 0;
         }
