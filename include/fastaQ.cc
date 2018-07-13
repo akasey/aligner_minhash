@@ -39,3 +39,14 @@ InputRead FastQ::next() {
     }
     return read;
 }
+
+PairedFastQ::PairedFastQ(std::string files[2]) : fastq1(files[0]), fastq2(files[1]){}
+
+bool PairedFastQ::hasNext() {
+    return (fastq1.hasNext() && fastq2.hasNext());
+}
+
+void PairedFastQ::next(InputRead returnReads[2]) {
+    returnReads[0] = fastq1.next();
+    returnReads[1] = fastq2.next();
+}

@@ -7,6 +7,9 @@
 
 #include "input_reader.h"
 
+/**
+ * FastQ is for reading in fastq files.
+ */
 class FastQ : public InputReader {
 public:
     FastQ(std::string filename) : InputReader(filename) {};
@@ -14,5 +17,14 @@ public:
     InputRead next();
 };
 
+class PairedFastQ {
+private:
+    FastQ fastq1, fastq2;
+public:
+    PairedFastQ(std::string files[2]);
+    bool hasNext();
+    void next(InputRead returnReads[2]);
+
+};
 
 #endif //ALIGNER_MINHASH_FASTAQ_H

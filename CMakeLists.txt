@@ -21,7 +21,8 @@ include_directories(include)
 add_executable(minhash_index minhash_index.cc include/minhash.cc include/common.cc include/kmer.cc include/indexer_jobparser.cc include/fastamm.cc include/ThreadPool.h)
 target_link_libraries(minhash_index ${CMAKE_THREAD_LIBS_INIT})
 
-add_executable(aligner align.cc include/minhash.cc include/common.cc
+add_executable(aligner align.cc align_single.cc
+        include/minhash.cc include/common.cc
         include/kmer.cc include/tf_metaparser.cc include/fastamm.cc
         include/ThreadPool.h include/tensorflow_inference.cc include/fastaQ.cc
         include/input_reader.cc include/sam_writer.cc include/indexer_jobparser.cc

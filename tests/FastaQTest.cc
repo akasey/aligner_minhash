@@ -15,4 +15,15 @@ int main() {
             std::cout << read.sequence << std::endl;
         }
     }
+
+    std::cout << "Testing paired reads" << std::endl;
+    std::string inputFiles[2] = { "/Users/akash/PycharmProjects/aligner/sample_classification_run/pairedReads/out.bwa.read1.fastq",
+                                  "/Users/akash/PycharmProjects/aligner/sample_classification_run/pairedReads/out.bwa.read2.fastq" };
+    PairedFastQ pairedReader(inputFiles);
+    int counter = 0;
+    while (pairedReader.hasNext() && counter++ < 10) {
+        InputRead read[2];
+        pairedReader.next(read);
+        std::cout << read[0].key << ":" << read[0].sequence << " " << read[1].key << ":" << read[1].sequence << std::endl;
+    }
 }
