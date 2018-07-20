@@ -19,6 +19,7 @@
 #define NULL_CHECK(val, message)  if (val == NULL) { LOG(ERROR) << message; exit(-69); }
 
 #define PROGRAM_NAME "asm_aligner"
+#define PAIRED_DISTANCE_THRESHOLD 500
 
 struct ElementNotFoundException : public std::exception {
     std::string message;

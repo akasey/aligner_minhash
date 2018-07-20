@@ -13,7 +13,7 @@
  * Let's say neural network predicts the read as belonging to two segments. When searching minhash, we search both positive and negative strand of read on that segment. Total set<Minhash::Neighbour>s = 4;
  * Those four sets are sorted and first element will contain Neighbour with highest score. This class wraps a priority_queue which will select the highest score out of those four sets.
  * Priority queue stores the beginning element of each sets as struct Element. Element->key is unsigned 16bit int. MSB is set if that element comes from set of positive strand and other bits are for NN predicted segment.
- * Here the assumption is number of predicted segments will be less than 2^16. makeKey() and decodeKey() are for those bit manipulations.
+ * Here the assumption is number of predicted segments will be less than 2^15. makeKey() and decodeKey() are for those bit manipulations.
  *
  * To add new set, use addQueue(). It will add first element of set to priority queue.
  * To pop an element, use pop(). It will pop max element of priority queue and remove that element from corresponding set. Also it takes the new beginning element of that set and put it into priority queue.

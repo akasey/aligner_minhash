@@ -9,7 +9,6 @@
 #include "include/tf_metaparser.h"
 #include "include/tensorflow_inference.h"
 #include "include/ThreadPool.h"
-#include "include/fastaQ.h"
 #include "include/sam_writer.h"
 #include "include/indexer_jobparser.h"
 #include "include/priorityqueue_wrapper.h"
