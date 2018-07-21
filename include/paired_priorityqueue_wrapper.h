@@ -30,8 +30,8 @@ private:
                                       // same inc in first and second coz the iterators will get those and will make pairs redundant
         void oneWayTraversalPeek(float *score, int *distance);
         void otherWayTraversalPeek(float *score, int *distance);
-        void oneWayTraversalMove(float *score, int *distance);
-        void otherWayTraversalMove(float *score, int *distance);
+        std::pair<Minhash::Neighbour, Minhash::Neighbour> oneWayTraversalMove();
+        std::pair<Minhash::Neighbour, Minhash::Neighbour> otherWayTraversalMove();
         bool isEmpty();
         std::pair<Minhash::Neighbour, Minhash::Neighbour> top();
     };
@@ -43,8 +43,34 @@ private:
 
         bool operator <(const Element &rhs) const {
             if (score == rhs.score)
+                return distance < rhs.distance;
+            else if (score == rhs.score && distance == rhs.distance)
+                return key < rhs.key;
+            return score < rhs.score;
+        }
+
+        bool operator==(const Element &rhs) const {
+            return score == rhs.score && distance==rhs.distance && key==rhs.key;
         }
     };
+
+    std::map<KeyType, MinhashNeighbourPairedSet> queueMapping;
+    std::priority_queue<Element> queue;
+
+    KeyType firstMsbSetNumber; // const
+    KeyType secondMsbSetNumber; // const
+    KeyType makeKey(int firstPartition, bool firstForwardStrand, int secondPartition, bool secondForwardStrand);
+    void decodeKey(KeyType key, int *firstPartition, bool *firstForwardStrand, int *secondPartition, bool *secondForwardStrand);
+
+public:
+    PairedPriorityQueueWrapper();
+    ~PairedPriorityQueueWrapper();
+
+    void addQueue(int firstPartition, bool firstForwardStrand, std::set<Minhash::Neighbour> *firstQueue,
+                  int secondPartition, bool secondForwardStrand, std::set<Minhash::Neighbour> *secondQueue );
+    bool hasNext();
+    void pop(int *firstPartition, bool *firstForwardStrand, Minhash::Neighbour *firstNeighbour,
+             int *secondPartition, bool *secondForwardStrand, Minhash::Neighbour *secondNeighbour);
 };
 
 
