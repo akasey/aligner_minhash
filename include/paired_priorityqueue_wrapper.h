@@ -7,6 +7,8 @@
 
 #include "common.h"
 #include "minhash.h"
+#include "iterator"
+#include <queue>
 
 struct QueueEmptyException : public std::exception {
     std::string message;
@@ -21,21 +23,6 @@ class PairedPriorityQueueWrapper {
 typedef uint32_t KeyType;
 
 private:
-    struct MinhashNeighbourPairedSet {
-        MinhashNeighbourPairedSet(std::set<Minhash::Neighbour> *, std::set<Minhash::Neighbour> *);
-        ~MinhashNeighbourPairedSet();
-        std::set<Minhash::Neighbour> *first, *second;
-        std::set<Minhash::Neighbour>::iterator firstItr, secondItr; // one way traversal
-        uint16_t firstInc, secondInc; // other way traversal.. integers to make sure we don't have
-                                      // same inc in first and second coz the iterators will get those and will make pairs redundant
-        void oneWayTraversalPeek(float *score, int *distance);
-        void otherWayTraversalPeek(float *score, int *distance);
-        std::pair<Minhash::Neighbour, Minhash::Neighbour> oneWayTraversalMove();
-        std::pair<Minhash::Neighbour, Minhash::Neighbour> otherWayTraversalMove();
-        bool isEmpty();
-        std::pair<Minhash::Neighbour, Minhash::Neighbour> top();
-    };
-
     struct Element {
         float score;
         float distance; // distance
@@ -54,7 +41,23 @@ private:
         }
     };
 
-    std::map<KeyType, MinhashNeighbourPairedSet> queueMapping;
+    struct MinhashNeighbourPairedSet {
+        MinhashNeighbourPairedSet(std::set<Minhash::Neighbour> *, std::set<Minhash::Neighbour> *);
+        ~MinhashNeighbourPairedSet();
+        std::set<Minhash::Neighbour> *first, *second;
+        std::set<Minhash::Neighbour>::iterator firstItr, secondItr; // one way traversal
+        uint16_t firstInc, secondInc; // other way traversal.. integers to make sure we don't have
+                                      // same inc in first and second coz the iterators will get those and will make pairs redundant
+        void oneWayTraversalPeek(float *score, int *distance);
+        void otherWayTraversalPeek(float *score, int *distance);
+        std::pair<Minhash::Neighbour, Minhash::Neighbour> oneWayTraversalMove();
+        std::pair<Minhash::Neighbour, Minhash::Neighbour> otherWayTraversalMove();
+        bool isEmpty();
+        std::pair<Minhash::Neighbour, Minhash::Neighbour> top();
+        Element peek();
+    };
+
+    std::map<KeyType, MinhashNeighbourPairedSet *> queueMapping;
     std::priority_queue<Element> queue;
 
     KeyType firstMsbSetNumber; // const

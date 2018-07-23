@@ -26,7 +26,7 @@ add_executable(aligner align.cc align_single.cc align_paired.cc
         include/kmer.cc include/tf_metaparser.cc include/fastamm.cc
         include/ThreadPool.h include/tensorflow_inference.cc include/fastaQ.cc
         include/input_reader.cc include/sam_writer.cc include/indexer_jobparser.cc
-        include/priorityqueue_wrapper.cc
+        include/priorityqueue_wrapper.cc include/paired_priorityqueue_wrapper.cc
         dependencies/ssw/src/ssw_cpp.cpp dependencies/ssw/src/ssw.c)
 target_link_libraries(aligner TensorflowCC::Static)
 target_link_libraries(aligner ${CMAKE_THREAD_LIBS_INIT})

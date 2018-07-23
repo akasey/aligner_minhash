@@ -28,14 +28,16 @@ void PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::oneWayTraversalPeek(
     if (firstItr == first->end())
         throw new QueueEmptyException("OneWay: I'm out");
     *score = firstItr->jaccard + secondItr->jaccard;
-    *distance = abs(firstItr->id - secondItr->id);
+    *distance = abs((int)firstItr->id - (int)secondItr->id);
 }
 
 void PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::otherWayTraversalPeek(float *score, int *distance) {
     if (firstInc == first->size())
         throw new QueueEmptyException("OtherWay: I'm out");
-    *score = (first->begin()+firstInc)->jaccard + (second->begin()+secondInc)->jaccard;
-    *distance = abs((first->begin()+firstInc)->id - (second->begin()+secondInc)->id);
+    auto firstNav = std::next(first->begin(), firstInc);
+    auto secondNav = std::next(second->begin(), secondInc);
+    *score = firstNav->jaccard + secondNav->jaccard;
+    *distance = abs((int)firstNav->id - (int)secondNav->id);
 }
 
 std::pair<Minhash::Neighbour, Minhash::Neighbour> PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::oneWayTraversalMove() {
@@ -48,12 +50,14 @@ std::pair<Minhash::Neighbour, Minhash::Neighbour> PairedPriorityQueueWrapper::Mi
         }
         if (firstItr == first->end())
             throw new QueueEmptyException("OneWayMove: I'm out");
-    } while ( ! abs(firstItr->id - secondItr->id) <= PAIRED_DISTANCE_THRESHOLD );
+    } while ( ! abs((int)firstItr->id - (int)secondItr->id) <= PAIRED_DISTANCE_THRESHOLD );
     return toRet;
 }
 
-void PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::otherWayTraversalMove() {
-    std::pair<Minhash::Neighbour, Minhash::Neighbour> toRet(*(first->begin()+firstInc), *(second->begin()+secondInc));
+std::pair<Minhash::Neighbour, Minhash::Neighbour> PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::otherWayTraversalMove() {
+    auto firstNav = std::next(first->begin(), firstInc);
+    auto secondNav = std::next(second->begin(), secondInc);
+    std::pair<Minhash::Neighbour, Minhash::Neighbour> toRet(*firstNav, *secondNav);
     do {
         firstInc++;
         if (firstInc == first->size()) {
@@ -61,8 +65,10 @@ void PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::otherWayTraversalMov
             firstInc = 0;
         }
         if (secondInc == second->size())
-            throw new() QueueEmptyException("OtherWayMove: I'm out");
-    } while ( firstInc != second && ! abs((first->begin()+firstInc)->id - (second->begin()+secondInc)->id) <= PAIRED_DISTANCE_THRESHOLD );
+            throw new QueueEmptyException("OtherWayMove: I'm out");
+        firstNav = std::next(first->begin(), firstInc);
+        secondNav = std::next(second->begin(), secondInc);
+    } while (! abs((int)firstNav->id - (int)secondNav->id) <= PAIRED_DISTANCE_THRESHOLD );
     return toRet;
 }
 
@@ -71,14 +77,27 @@ std::pair<Minhash::Neighbour, Minhash::Neighbour> PairedPriorityQueueWrapper::Mi
     float otherWayScore; int otherWayDistance;
     oneWayTraversalPeek(&oneWayScore, &oneWayDistance);
     otherWayTraversalPeek(&otherWayScore, &otherWayDistance);
-    if (oneWayScore < otherWayScore)
-        return oneWayTraversalMove();
-    else if (otherWayScore > oneWayScore)
-        return otherWayTraversalMove();
-    else if (oneWayScore == otherWayScore && oneWayDistance < otherWayDistance)
+    Element element1, element2;
+    element1.key = 1; element1.score = oneWayScore; element1.distance = oneWayDistance;
+    element2.key = 1; element2.score = oneWayScore; element2.distance = oneWayDistance;
+    if (element2 < element1)
         return oneWayTraversalMove();
     else
         return otherWayTraversalMove();
+}
+
+PairedPriorityQueueWrapper::Element PairedPriorityQueueWrapper::MinhashNeighbourPairedSet::peek() {
+    float oneWayScore; int oneWayDistance;
+    float otherWayScore; int otherWayDistance;
+    oneWayTraversalPeek(&oneWayScore, &oneWayDistance);
+    otherWayTraversalPeek(&otherWayScore, &otherWayDistance);
+    Element element1, element2;
+    element1.key = 1; element1.score = oneWayScore; element1.distance = oneWayDistance;
+    element2.key = 1; element2.score = oneWayScore; element2.distance = oneWayDistance;
+    if (element2 < element1)
+        return element1;
+    else
+        return element2;
 }
 
 
@@ -96,9 +115,9 @@ PairedPriorityQueueWrapper::~PairedPriorityQueueWrapper() {
     queueMapping.clear();
 }
 
-KeyType PairedPriorityQueueWrapper::makeKey(int firstPartition, bool firstForwardStrand, int secondPartition, bool secondForwardStrand) {
-    KeyType n = firstPartition;
-    n = n << 15 | secondPartition;
+PairedPriorityQueueWrapper::KeyType PairedPriorityQueueWrapper::makeKey(int firstPartition, bool firstForwardStrand, int secondPartition, bool secondForwardStrand) {
+    KeyType n = (uint16_t) firstPartition;
+    n = n << 15 | (uint16_t) secondPartition;
     if (firstForwardStrand)
         n = n | firstMsbSetNumber;
     if (secondForwardStrand)
@@ -107,8 +126,51 @@ KeyType PairedPriorityQueueWrapper::makeKey(int firstPartition, bool firstForwar
 }
 
 void PairedPriorityQueueWrapper::decodeKey(KeyType key, int *firstPartition, bool *firstForwardStrand, int *secondPartition, bool *secondForwardStrand) {
-    firstPartition = ( key & (~firstMsbSetNumber) & (~secondMsbSetNumber) ) >> 15;
-    firstForwardStrand = key & firstMsbSetNumber;
+    KeyType negmask = (~(uint16_t)0 << 15);
+    KeyType mask = negmask & (~firstMsbSetNumber) & (~secondMsbSetNumber);
+    *firstPartition = (key & mask) >> 15;
+    *firstForwardStrand = key & firstMsbSetNumber;
 
-    secondPartition = ( key & (~firstMsbSetNumber) & (~secondMsbSetNumber) )
+    negmask = (key << 1) & ~(uint16_t)0;
+    *secondPartition = (key & negmask) >> 1;
+    *secondForwardStrand = key & secondMsbSetNumber;
+}
+
+void PairedPriorityQueueWrapper::addQueue(int firstPartition, bool firstForwardStrand, std::set<Minhash::Neighbour> *firstQueue,
+              int secondPartition, bool secondForwardStrand, std::set<Minhash::Neighbour> *secondQueue ) {
+    if (firstQueue->size() > 0 && secondQueue->size() > 0) {
+        KeyType key = makeKey(firstPartition, firstForwardStrand, secondPartition, secondForwardStrand);
+        PairedPriorityQueueWrapper::MinhashNeighbourPairedSet *pairedSet = new MinhashNeighbourPairedSet(firstQueue, secondQueue);
+        queueMapping[key] = pairedSet;
+
+        Element ele = pairedSet->peek();
+        ele.key = key;
+        queue.push(ele);
+    }
+}
+
+bool PairedPriorityQueueWrapper::hasNext() {
+    return !queue.empty();
+}
+
+void PairedPriorityQueueWrapper::pop(int *firstPartition, bool *firstForwardStrand, Minhash::Neighbour *firstNeighbour,
+         int *secondPartition, bool *secondForwardStrand, Minhash::Neighbour *secondNeighbour) {
+    Element ele = queue.top();
+    queue.pop();
+
+    MinhashNeighbourPairedSet *pairedSet = queueMapping[ele.key];
+    decodeKey(ele.key, firstPartition, firstForwardStrand, secondPartition, secondForwardStrand);
+    std::pair<Minhash::Neighbour, Minhash::Neighbour> pairedNeighbours = pairedSet->top();
+    *firstNeighbour = pairedNeighbours.first;
+    *secondNeighbour = pairedNeighbours.second;
+
+    try {
+        Element element = pairedSet->peek();
+        element.key = ele.key;
+        queue.push(element);
+    }
+    catch (QueueEmptyException ex) {
+
+    }
+
 }

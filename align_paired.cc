@@ -9,6 +9,7 @@
 #include "include/sam_writer.h"
 #include "include/input_reader.h"
 #include "include/fastaQ.h"
+#include "include/paired_priorityqueue_wrapper.h"
 
 struct PairedReadsWrapper {
     InputRead *read[2];
@@ -36,10 +37,11 @@ void pairedPrediction(TensorflowInference &inferEngine, std::vector<PairedReadsW
         readsVector[i].predictedSegments[0] = new std::set<std::pair<int, bool> >();
         readsVector[i].predictedSegments[1] = new std::set<std::pair<int, bool> >();
         std::set<std::pair<int, bool> > inner = predictions[i];
-        for (int j=0; j<predictions.size(); j++) {
-            std::pair<int, bool> lacasito = predictions[j];
+        int j = 0;
+        for (auto lacasito : inner) {
             int key = j%2;
             readsVector[i].predictedSegments[key]->insert(lacasito);
+            j++;
         }
     }
     predictions.clear();
@@ -78,5 +80,32 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
         }
 
         pairedPrediction(inferEngine, readsVector, pairs, loadCount);
+
+        PairedPriorityQueueWrapper queueWrapper;
+        for (int i=0; i<loadCount; i++) {
+            PairedReadsWrapper *currentRead = &(readsVector[i]);
+            for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments[0])) {
+                if (! firstPrediction.first < mhIndices.size())
+                    continue;
+                std::string key1 = "index-" + std::to_string(firstPrediction.first) + ".mh";
+                std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer[0], *(currentRead->totalKmer));
+                queueWrapper.addQueue(firstPrediction.first, true, &firstPosNeighbours, firstPrediction.first, true, &firstPosNeighbours);
+                for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments[1])) {
+                    if (! secondPrediction.first < mhIndices.size())
+                        continue;
+                    std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
+                    std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer[1], *(currentRead->totalKmer));
+                    queueWrapper.addQueue(firstPrediction.first, true, &firstPosNeighbours, secondPrediction.first, true, &secondPosNeighbours);
+                }
+            }
+        }
+
+        std::cout << loadCount << " done" << std::endl;
+        while (queueWrapper.hasNext()) {
+            int firstPartition; bool firstForwardStrand; Minhash::Neighbour firstNeighbour;
+            int secondPartition; bool secondForwardStrand; Minhash::Neighbour secondNeighbour;
+            queueWrapper.pop(&firstPartition, &firstForwardStrand, &firstNeighbour,
+                            &secondPartition, &secondForwardStrand, &secondNeighbour);
+        }
     }
 }
