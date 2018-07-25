@@ -156,7 +156,6 @@ void Minhash::addDocument(DocID id, Kmer *shingles, int totalShingles) {
             (*index[i])[bandhashes[i]].insert(id);
         }
     }
-    std::cout << "[" << id << "]Map size: " << index[0]->size() << std::endl;
 
 #if MINHASH_STORAGE
     minhashStorage[id] = minhash;

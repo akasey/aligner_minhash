@@ -28,7 +28,7 @@ std::map<std::string, std::string> processArguments(int argc, const char *argv[]
     std::string samFile = "";
     std::string mode = "single";
     int nThreads = 4;
-    int tfBatchSize = 1;
+    int tfBatchSize = 5;
 
     std::string wholeCommand = "";
     for (int i=0; i<argc; i++) {
@@ -151,6 +151,8 @@ int main(int argc, const char* argv[]) {
     LOG(INFO) << "Reading in minhash indices...";
     std::map<std::string, Minhash *> mhIndices;
     readIndices(indices, nThreads, &mhIndices);
+
+    LOG(INFO) << "KMER_K " << KMER_K;
 
 /*    for (int i =0; i<indices.size(); i++) {
         std::string base = basename(indices[i]);

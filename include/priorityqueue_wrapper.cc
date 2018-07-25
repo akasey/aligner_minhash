@@ -9,7 +9,7 @@ PriorityQueueWrapper::PriorityQueueWrapper() : msbSetNumber(0) {
     // Otherwise uint32_t for KeyType
     KeyType n = 0;
     n = ~n;
-    uint16_t x = n >> 1;
+    KeyType x = n >> 1;
     n = ~(n & x);
     // n has MSB set to 1
     msbSetNumber = n;

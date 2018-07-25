@@ -85,13 +85,13 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
         for (int i=0; i<loadCount; i++) {
             PairedReadsWrapper *currentRead = &(readsVector[i]);
             for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments[0])) {
-                if (! firstPrediction.first < mhIndices.size())
+                if (firstPrediction.first >= mhIndices.size())
                     continue;
                 std::string key1 = "index-" + std::to_string(firstPrediction.first) + ".mh";
                 std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer[0], *(currentRead->totalKmer));
                 queueWrapper.addQueue(firstPrediction.first, true, &firstPosNeighbours, firstPrediction.first, true, &firstPosNeighbours);
                 for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments[1])) {
-                    if (! secondPrediction.first < mhIndices.size())
+                    if (secondPrediction.first >= mhIndices.size() || abs(firstPrediction.first-secondPrediction.first)>1 )
                         continue;
                     std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
                     std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer[1], *(currentRead->totalKmer));
@@ -106,6 +106,8 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
             int secondPartition; bool secondForwardStrand; Minhash::Neighbour secondNeighbour;
             queueWrapper.pop(&firstPartition, &firstForwardStrand, &firstNeighbour,
                             &secondPartition, &secondForwardStrand, &secondNeighbour);
+            std::cout << "firstPartition " << firstPartition << " firstForward " << firstForwardStrand << " neighbour [" << static_cast<int>(firstNeighbour.id) << "," << firstNeighbour.jaccard << ") "
+                    << "secondPartition " << secondPartition << " secondForward " << secondForwardStrand << " neighbour [" << static_cast<int>(secondNeighbour.id) << "," << secondNeighbour.jaccard << ") " << std::endl;
         }
     }
 }
