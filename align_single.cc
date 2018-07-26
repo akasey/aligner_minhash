@@ -66,7 +66,7 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 #if DEBUG_MODE
     LOG(INFO) << "Alignment score: " << *score << " Happy threshold: " << queryString.length()*0.8;
 #endif
-    if ( queryString.length()*0.8 <= *score) { // consider mapped
+    if ( queryString.length()*0.8 <= *score) { // atleast 80% matches // consider mapped
         happy = true;
         retAlignment->flag = retAlignment->flag | (forwardStrand ? 0 : REVERSE_MAPPED);
     }
@@ -82,10 +82,8 @@ inline bool tryFirstOutofGiven(ReadsWrapper *currentRead, int &predictedSegment,
     if (neighbours.size() > 0) {
         Minhash::Neighbour first = *(neighbours.begin());
         neighbours.erase(neighbours.begin());
-        alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, windowLength, retAlignment, score);
-        if ( currentRead->read->sequence.length()*0.8 <= *score ) { // atleast 80% matches
-            return true;
-        }
+        // atleast 80% matches
+        return alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, windowLength, retAlignment, score);
     }
     return false; // not happy with this alignment
 }
