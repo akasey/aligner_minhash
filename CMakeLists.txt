@@ -40,7 +40,8 @@ target_link_libraries(minhash_test ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(fastq_test tests/FastaQTest.cc include/common.cc include/fastaQ.cc include/input_reader.cc)
 
-add_executable(inference_test tests/TensorflowInferenceTest.cc include/minhash.cc include/common.cc include/kmer.cc include/tensorflow_inference.cc include/tf_metaparser.cc)
+add_executable(inference_test tests/TensorflowInferenceTest.cc include/minhash.cc include/common.cc include/kmer.cc include/tensorflow_inference.cc
+        include/tf_metaparser.cc include/indexer_jobparser.cc include/fastamm.cc include/fastaQ.cc include/input_reader.cc)
 target_link_libraries(inference_test TensorflowCC::Static)
 target_link_libraries(inference_test ${CMAKE_THREAD_LIBS_INIT})
 

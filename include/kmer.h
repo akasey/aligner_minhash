@@ -22,7 +22,7 @@ extern const Kmer POSSIBLE_KMER_SIZE;
 
 static uint8_t numbifyNt(char a);
 Kmer encodeKmer(std::string kmer);
-Kmer * encodeWindow(std::string window, int *totalKmers);
+Kmer * encodeWindow(std::string window, int *totalKmers, int K=KMER_K);
 std::map<int, std::string> makeSlidingWindow(std::string &segment, int startLocation, int windowLength, int strides);
 std::string reverseComplement(std::string sequence);
 

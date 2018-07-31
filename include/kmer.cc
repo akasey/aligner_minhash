@@ -45,12 +45,12 @@ Kmer encodeKmer(std::string kmer) {
  * @param window: string sequence
  * @return Numeric encoding of kmers in given window and totalKmers = len(window) -K+1
  */
-Kmer * encodeWindow(std::string window, int *totalKmers) {
-    *totalKmers = window.length() - KMER_K + 1;
+Kmer * encodeWindow(std::string window, int *totalKmers, int K) {
+    *totalKmers = window.length() - K + 1;
     Kmer* retHash = new Kmer[*totalKmers];
     Kmer out;
     for (int i=0; i<*totalKmers; i++) {
-        std::string kmer = window.substr(i, KMER_K);
+        std::string kmer = window.substr(i, K);
         out = encodeKmer(kmer);
         retHash[i] = out;
     }
