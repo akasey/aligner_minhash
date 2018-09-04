@@ -48,10 +48,10 @@ void Minhash::deinit() {
 #endif
 }
 
-std::map<Kmer,int> Minhash::frequencifyShingles(Kmer* shingles, int len) {
+std::map<Kmer,int> Minhash::frequencifyShingles(std::shared_ptr<Kmer> shingles, int len) {
     std::map<Kmer, int> count;
     for (int i=0; i<len; i++) {
-        Kmer shingle = shingles[i];
+        Kmer shingle = shingles.get()[i];
         std::map<Kmer,int>::iterator found = count.find(shingle);
         if (found == count.end()){
             count[shingle] = 1;
@@ -64,10 +64,11 @@ std::map<Kmer,int> Minhash::frequencifyShingles(Kmer* shingles, int len) {
     return count;
 }
 
-Kmer* Minhash::computeMinHash(std::map<Kmer,int> shinglesWithFreq) {
-    Kmer* hashes = new Kmer[numHashes];
+std::shared_ptr<Kmer> Minhash::computeMinHash(std::map<Kmer,int> shinglesWithFreq) {
+    std::shared_ptr<Kmer> hashes( new Kmer[numHashes], [](Kmer* p){ delete [] p; } );
     Kmer bestMinimum[numHashes];
-    std::fill_n(bestMinimum, numHashes, MAX_UINT);
+    for (int i=0; i< numHashes; i++)
+        bestMinimum[i] = MAX_UINT;
 
     for (std::map<Kmer,int>::iterator itr = shinglesWithFreq.begin(); itr!=shinglesWithFreq.end(); ++itr) {
         // initial shift value
@@ -77,7 +78,7 @@ Kmer* Minhash::computeMinHash(std::map<Kmer,int> shinglesWithFreq) {
             for (int k=0; k<itr->second; k++){
                 x = rand() % MAX_UINT;
                 if (x < bestMinimum[j]) {
-                    hashes[j] = itr->first;
+                    hashes.get()[j] = itr->first;
                     bestMinimum[j] = x;
                 }
             }
@@ -88,16 +89,16 @@ Kmer* Minhash::computeMinHash(std::map<Kmer,int> shinglesWithFreq) {
 }
 
 
-BandhashVar* Minhash::computeBandHash(Kmer* minhash) {
-    BandhashVar* bandhashes = new BandhashVar[totalBands];
+std::shared_ptr<BandhashVar> Minhash::computeBandHash(std::shared_ptr<Kmer> minhash) {
+    std::shared_ptr<BandhashVar> bandhashes( new BandhashVar[totalBands] , [](BandhashVar* p){ delete[] p; });
     int counter = 0;
 
     for (int i=0; i<numHashes; i+=LSH_bandSize) {
         Kmer mh[LSH_bandSize];
         for (int j=0; j<LSH_bandSize; j++) {
-            mh[j]=minhash[i+j];
+            mh[j]=minhash.get()[i+j];
         }
-        bandhashes[counter] = hashBand(mh,LSH_bandSize);
+        bandhashes.get()[counter] = hashBand(mh,LSH_bandSize);
         counter++;
     }
     return bandhashes;
@@ -129,63 +130,52 @@ float Minhash::jaccard(DocID doc, Kmer* minhash) {
 
 void Minhash::addDocument(DocID id, std::string sequence) {
     int totalShingles = 0;
-    Kmer * kmers = encodeWindow(sequence, &totalShingles);
-    Kmer * shingles = new Kmer[totalShingles];
-    for (int i=0; i<totalShingles; i++)
-        shingles[i] = kmers[i];
-    delete [] kmers;
-    addDocument(id, shingles, totalShingles);
+    std::shared_ptr<Kmer> kmers( encodeWindow(sequence, &totalShingles) , [ ](Kmer* p) { delete [ ] p; } );
+    addDocument(id, kmers, totalShingles);
 }
 
-void Minhash::addDocument(DocID id, Kmer *shingles, int totalShingles) {
+void Minhash::addDocument(DocID id, std::shared_ptr<Kmer> shingles, int totalShingles) {
     std::map<Kmer,int> shinglesWithFreq = frequencifyShingles(shingles, totalShingles);
 
     mutex.lock();
-    Kmer* minhash = computeMinHash(shinglesWithFreq);
+    std::shared_ptr<Kmer> minhash = computeMinHash(shinglesWithFreq);
     mutex.unlock();
-    BandhashVar* bandhashes = computeBandHash(minhash);
+    std::shared_ptr<BandhashVar> bandhashes = computeBandHash(minhash);
 
     for(int i=0; i<totalBands; i++) {
-        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandhashes[i]);
+        BandhashVar bandHash = bandhashes.get()[i];
+        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandHash);
         if(found == index[i]->end()) {
             std::set<DocID > a;
             a.insert(id);
-            (*index[i])[bandhashes[i]] = a;
+            (*index[i])[bandHash] = a;
         }
         else {
-            (*index[i])[bandhashes[i]].insert(id);
+            (*index[i])[bandHash].insert(id);
         }
     }
 
 #if MINHASH_STORAGE
     minhashStorage[id] = minhash;
-#else
-    delete [] minhash;
 #endif
-
-    delete [] shingles;
-    delete [] bandhashes;
 }
 
 std::set<Minhash::Neighbour> Minhash::findNeighbours(std::string sequence) {
     int totalShingles = 0;
-    Kmer * kmers = encodeWindow(sequence, &totalShingles);
-    Kmer * shingles = new Kmer[totalShingles];
-    for (int i=0; i<totalShingles; i++)
-        shingles[i] = kmers[i];
-    delete [] kmers;
+    std::shared_ptr<Kmer> shingles( encodeWindow(sequence, &totalShingles), [](Kmer* p) { delete [] p; } );
     return findNeighbours(shingles, totalShingles);
 }
 
 
-std::set<Minhash::Neighbour> Minhash::findNeighbours(Kmer* shingles, int totalShingles) {
+std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shingles, int totalShingles) {
     std::map<Kmer,int> shinglesWithFreq = frequencifyShingles(shingles, totalShingles);
-    Kmer* minhash = computeMinHash(shinglesWithFreq);
-    BandhashVar* bandhashes = computeBandHash(minhash);
+    std::shared_ptr<Kmer> minhash = computeMinHash(shinglesWithFreq);
+    std::shared_ptr<BandhashVar> bandhashes = computeBandHash(minhash);
 
     std::map<int, int> neighbourhood; // record, hits
     for (int i=0; i<totalBands; i++) {
-        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandhashes[i]);
+        BandhashVar bandHash = bandhashes.get()[i];
+        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandHash);
         if(found != index[i]->end()) {
             for (std::set<DocID >::iterator it = found->second.begin();
                  it != found->second.end(); ++it) {
@@ -204,9 +194,6 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(Kmer* shingles, int totalSh
         rec.jaccard = itr->second * 1.0f;
         neighbours.insert(rec);
     }
-
-    delete [] minhash;
-    delete [] bandhashes;
 
     return neighbours;
 }

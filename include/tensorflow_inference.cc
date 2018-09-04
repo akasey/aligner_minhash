@@ -92,11 +92,11 @@ Status TensorflowInference::GetNonZeroLabels(const std::vector<Tensor>& outputs,
     return Status::OK();
 }
 
-Tensor TensorflowInference::makeTensor(std::vector< std::pair<Kmer *, int> > pairs) {
+Tensor TensorflowInference::makeTensor(std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs) {
     int totalRows = pairs.size();
     Tensor tensor(tensorflow::DT_FLOAT, tensorflow::TensorShape( { totalRows,input_shape} ));
     for (int i=0; i < totalRows; i++) {
-        std::pair<Kmer *, int> kmerRows = pairs[i];
+        std::pair<std::shared_ptr<Kmer>, int> kmerRows = pairs[i];
         auto vector = tensor.matrix<float>();
         for (int j = 0; j < input_shape; j++) {
             vector(i, j) = 0;
@@ -106,7 +106,7 @@ Tensor TensorflowInference::makeTensor(std::vector< std::pair<Kmer *, int> > pai
 
         }
         for (int j = 0; j < kmerRows.second; j++) {
-            Kmer enumeration = kmerRows.first[j];
+            Kmer enumeration = kmerRows.first.get()[j];
             vector(i, enumeration) = 1;
 //            vector(i+1, enumeration) = 1;
         }

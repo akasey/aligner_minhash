@@ -10,7 +10,7 @@
 #include <map>
 #include <algorithm>
 
-#define KMER_K 6
+#define KMER_K 7
 
 #if KMER_K<=8
 typedef uint16_t Kmer;

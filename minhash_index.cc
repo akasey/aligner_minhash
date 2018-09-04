@@ -39,6 +39,7 @@ void mainStuffs(std::string &baseDirectory, int nThreads) {
     LOG(INFO) << "Reading " << baseDirectory + "/sequence.fasta...";
     FastaMM fasta(baseDirectory);
     LOG(INFO) << "Reading " << baseDirectory + "/classify_detail.log...";
+    LOG(INFO) << "KMER_K: " << KMER_K;
     IndexerJobParser jobParser(baseDirectory);
     int numClasses = jobParser.getNumClasses();
     NULL_CHECK(numClasses, "Number of classes not in " + baseDirectory);

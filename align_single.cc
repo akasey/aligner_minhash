@@ -15,28 +15,29 @@
 
 
 struct ReadsWrapper{
-    InputRead *read;
-    Kmer *kmer;
-    Kmer *revKmer;
-    int *totalKmers;
-    std::string *reverseRead;
-    std::set<std::pair<int, bool> > *predictedSegments;
+    std::shared_ptr<InputRead> read;
+    std::shared_ptr<Kmer> kmer;
+    std::shared_ptr<Kmer> revKmer;
+    std::shared_ptr<int> totalKmers;
+    std::shared_ptr<std::string> reverseRead;
+    std::shared_ptr<std::set<std::pair<int, bool> > > predictedSegments;
 
-    void clear() {
-        if (read) delete read;
-        if (kmer) delete [] kmer;
-        if (revKmer) delete [] revKmer;
-        if (totalKmers) delete totalKmers;
-        if (reverseRead) delete reverseRead;
-        if (predictedSegments) delete predictedSegments;
+    ReadsWrapper() {
+        std::nullptr_t null;
+        read = std::shared_ptr<InputRead>(null);
+        kmer = std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; });
+        revKmer = std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; });
+        totalKmers = std::shared_ptr<int>(null);
+        reverseRead = std::shared_ptr<std::string>(null);
+        predictedSegments = std::shared_ptr<std::set<std::pair<int, bool> > >(null);
     }
 };
 
-inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrapper > &readsVector, std::vector< std::pair<Kmer *, int> > &pairs, int loadCount) {
+inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrapper > &readsVector, std::vector< std::pair<std::shared_ptr<Kmer>, int> > &pairs, int loadCount) {
     Tensor tensor = inferEngine.makeTensor(pairs);
     std::vector<std::set<std::pair<int, bool> > > predictions = inferEngine.inference(tensor);
     for (int i=0; i<loadCount; i++) {
-        readsVector[i].predictedSegments = new std::set<std::pair<int, bool> >();
+        readsVector[i].predictedSegments.reset( new std::set<std::pair<int, bool> >() );
         std::set<std::pair<int, bool> > inner = predictions[i];
         for (std::set<std::pair<int, bool> >::iterator mnm=predictions[i].begin(); mnm != predictions[i].end(); mnm++) {
             std::pair<int, bool> lacasito = *mnm;
@@ -99,17 +100,16 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
     FastQ fastq(fastqFile);
     while (fastq.hasNext()) {
         std::vector<ReadsWrapper > readsVector(tfBatchSize);
-        std::vector< std::pair<Kmer *, int> > pairs(tfBatchSize);
+        std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs(tfBatchSize);
         int loadCount = 0;
         for (int i=0; i<tfBatchSize && fastq.hasNext(); i++) {
             ReadsWrapper readsWrapper;
-            readsWrapper.read = new InputRead(fastq.next());
+            readsWrapper.read.reset( new InputRead(fastq.next()) );
             int totalKmers = 0;
-            readsWrapper.kmer = encodeWindow((readsWrapper.read)->sequence, &totalKmers);
-            readsWrapper.totalKmers = new int(totalKmers);
+            readsWrapper.kmer.reset( encodeWindow((readsWrapper.read)->sequence, &totalKmers) );
+            readsWrapper.totalKmers.reset( new int(totalKmers) );
             readsVector[i] = readsWrapper;
-            std::pair<Kmer *, int> onePair(readsVector[i].kmer, totalKmers);
-            pairs[i] = onePair;
+            pairs[i] = std::pair<std::shared_ptr<Kmer>, int> (readsVector[i].kmer, totalKmers);
             loadCount++;
         }
 
@@ -149,9 +149,9 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
 
                     // Also try first of reverse strand
                     std::string reverse = reverseComplement(currentRead->read->sequence);
-                    currentRead->reverseRead = new std::string(reverse);
+                    currentRead->reverseRead.reset( new std::string(reverse) );
                     int totalKmers = 0;
-                    currentRead->revKmer = encodeWindow(reverse, &totalKmers);
+                    currentRead->revKmer.reset( encodeWindow(reverse, &totalKmers) );
                     forwardStrand = false;
 
                     SamWriter::Alignment negAlignment;
@@ -180,7 +180,8 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
 #endif
             }
 
-            while(queueWrapper.hasNext()) {
+            int counter = 0;
+            while(queueWrapper.hasNext() && counter++ < 10) {
                 int partition; bool forwardStrand; Minhash::Neighbour neighbour;
                 queueWrapper.pop(&partition, &forwardStrand, &neighbour);
                 SamWriter::Alignment retAlignment; int retScore;

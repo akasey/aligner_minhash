@@ -19,7 +19,7 @@ struct PairedReadsWrapper {
     std::auto_ptr<std::set<std::pair<int, bool> > >predictedSegments[2];
 };
 
-inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<PairedReadsWrapper> &readsVector, std::vector< std::pair<Kmer *, int> > &pairs, int loadCount) {
+inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<PairedReadsWrapper> &readsVector, std::vector< std::pair<std::shared_ptr<Kmer>, int> > &pairs, int loadCount) {
     Tensor tensor = inferEngine.makeTensor(pairs); // pairs.size() = 2*loadCount
     std::vector<std::set<std::pair<int, bool> > > predictions = inferEngine.inference(tensor);
     for (int i=0; i<loadCount; i++) {
@@ -66,7 +66,7 @@ int main() {
 
     while (fastaLoader.hasNext()) {
         std::vector<PairedReadsWrapper> readsVector(tfBatchSize);
-        std::vector< std::pair<Kmer *, int> > pairs(tfBatchSize*2);
+        std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs(tfBatchSize*2);
         int loadCount = 0;
         for (int i=0; i<tfBatchSize && fastaLoader.hasNext(); i++) {
             PairedReadsWrapper readsWrapper;
@@ -81,8 +81,8 @@ int main() {
             readsWrapper.kmer[1] = std::auto_ptr<Kmer>(kmer1);
             readsWrapper.totalKmer = std::auto_ptr<int>(new int(totalKmer));
             readsVector[i] = readsWrapper;
-            std::pair<Kmer *, int> onePair(kmer0, totalKmer);
-            std::pair<Kmer *, int> twoPair(kmer1, totalKmer);
+            std::pair<std::shared_ptr<Kmer>, int> onePair(kmer0, totalKmer);
+            std::pair<std::shared_ptr<Kmer>, int> twoPair(kmer1, totalKmer);
             pairs[2*i] = onePair;
             pairs[2*i+1] = twoPair;
             loadCount++;

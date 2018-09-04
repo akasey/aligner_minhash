@@ -12,18 +12,21 @@
 #include "include/paired_priorityqueue_wrapper.h"
 
 struct PairedReadsWrapper {
-    std::auto_ptr<InputRead> read[2];
-    Kmer * kmer[2] = {NULL, NULL};
-    Kmer * revKmer[2] = {NULL, NULL};
-    std::auto_ptr<int> totalKmer;
-    std::auto_ptr<std::string> reversedRead[2];
-    std::auto_ptr<std::set<std::pair<int, bool> > >predictedSegments[2];
+    std::pair<std::shared_ptr<InputRead>, std::shared_ptr<InputRead> > read;
+    std::pair<std::shared_ptr<Kmer>,std::shared_ptr<Kmer> > kmer;
+    std::pair<std::shared_ptr<Kmer>,std::shared_ptr<Kmer> > revKmer;
+    std::shared_ptr<int> totalKmers;
+    std::pair<std::shared_ptr<std::string>, std::shared_ptr<std::string> > reversedRead;
+    std::pair<std::shared_ptr<std::set<std::pair<int, bool> > >, std::shared_ptr<std::set<std::pair<int, bool> > > > predictedSegments;
 
-    void clear() {
-        for (int j=0; j<2; j++) {
-            if (kmer[j]) delete[] kmer[j];
-            if (revKmer[j]) delete[] revKmer[j];
-        }
+    PairedReadsWrapper() {
+        std::nullptr_t null;
+        read = {std::shared_ptr<InputRead>(null), std::shared_ptr<InputRead>(null)};
+        kmer = { std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; }), std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; }) };
+        revKmer = { std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; }), std::shared_ptr<Kmer>(null, [](Kmer* p) { delete [] p; }) };
+        totalKmers = std::shared_ptr<int>(null);
+        reversedRead = {std::shared_ptr<std::string>(null),std::shared_ptr<std::string>(null)};
+        predictedSegments = { std::shared_ptr<std::set<std::pair<int, bool> > >(null), std::shared_ptr<std::set<std::pair<int, bool> > >(null) };
     }
 };
 
@@ -46,8 +49,8 @@ inline bool alignPairedMinhashNeighbour(PairedReadsWrapper *currentRead, int &fi
     int firstOffset, secondOffset;
     std::string firstPartOfReference = getPartOfReference(refBridge, firstPredictedSegment, firstNeighbour, &firstOffset, windowLength);
     std::string secondPartOfReference = getPartOfReference(refBridge, secondPredictedSegment, secondNeighbour, &secondOffset, windowLength);
-    std::string firstQueryString = firstForwardStrand ? currentRead->read[0]->sequence : *(currentRead->reversedRead[0]);
-    std::string secondQueryString = secondForwardStrand ? currentRead->read[1]->sequence : *(currentRead->reversedRead[1]);
+    std::string firstQueryString = firstForwardStrand ? currentRead->read.first->sequence : *(currentRead->reversedRead.first);
+    std::string secondQueryString = secondForwardStrand ? currentRead->read.second->sequence : *(currentRead->reversedRead.second);
 
     bool happy;
     SamWriter::Alignment nullAlignment;
@@ -85,15 +88,24 @@ inline bool tryPairedFirstOutOfGiven(PairedReadsWrapper *currentRead, int &first
 }
 
 
-inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<PairedReadsWrapper> &readsVector, std::vector< std::pair<Kmer *, int> > &pairs, int loadCount) {
+inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<PairedReadsWrapper> &readsVector, std::vector< std::pair<std::shared_ptr<Kmer>, int> > &pairs, int loadCount) {
     Tensor tensor = inferEngine.makeTensor(pairs); // pairs.size() = 2*loadCount
     std::vector<std::set<std::pair<int, bool> > > predictions = inferEngine.inference(tensor);
     for (int i=0; i<loadCount; i++) {
         for (int j=0; j<2; j++) {
-            readsVector[i].predictedSegments[j] = std::auto_ptr<std::set<std::pair<int, bool> >>(new std::set<std::pair<int, bool> > );
-            std::set<std::pair<int, bool> > inner = predictions[2*i+j];
-            for (auto lacasito : inner) {
-                readsVector[i].predictedSegments[j]->insert(lacasito);
+            if (j%2 == 0) {
+                readsVector[i].predictedSegments.first.reset( new std::set<std::pair<int, bool> >() );
+                std::set<std::pair<int, bool> > inner = predictions[2 * i + j];
+                for (auto lacasito : inner) {
+                    readsVector[i].predictedSegments.first->insert(lacasito);
+                }
+            }
+            else {
+                readsVector[i].predictedSegments.second.reset( new std::set<std::pair<int, bool> >() );
+                std::set<std::pair<int, bool> > inner = predictions[2 * i + j];
+                for (auto lacasito : inner) {
+                    readsVector[i].predictedSegments.second->insert(lacasito);
+                }
             }
         }
     }
@@ -113,23 +125,21 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
     PairedFastQ fastQ(fastQFiles);
     while (fastQ.hasNext()) {
         std::vector<PairedReadsWrapper> readsVector(tfBatchSize);
-        std::vector< std::pair<Kmer*, int> > pairs(tfBatchSize*2);
+        std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs(tfBatchSize*2);
         int loadCount = 0;
         for (int i=0; i<tfBatchSize && fastQ.hasNext(); i++) {
             PairedReadsWrapper readsWrapper;
             InputRead pairedReads[2];
             fastQ.next(pairedReads);
-            readsWrapper.read[0] = std::auto_ptr<InputRead>(new InputRead(pairedReads[0]));
-            readsWrapper.read[1] = std::auto_ptr<InputRead>(new InputRead(pairedReads[1]));
+            readsWrapper.read.first.reset( new InputRead(pairedReads[0]) );
+            readsWrapper.read.second.reset( new InputRead(pairedReads[1]) );
             int totalKmer = 0;
-            readsWrapper.kmer[0] = encodeWindow(readsWrapper.read[0]->sequence, &totalKmer, K);
-            readsWrapper.kmer[1] = encodeWindow(readsWrapper.read[1]->sequence, &totalKmer, K);
-            readsWrapper.totalKmer = std::auto_ptr<int>(new int(totalKmer));
+            readsWrapper.kmer.first.reset( encodeWindow(readsWrapper.read.first->sequence, &totalKmer, K) );
+            readsWrapper.kmer.second.reset( encodeWindow(readsWrapper.read.second->sequence, &totalKmer, K) );
+            readsWrapper.totalKmers.reset(new int(totalKmer));
             readsVector[i] = readsWrapper;
-            std::pair<Kmer *, int> onePair(readsWrapper.kmer[0], totalKmer);
-            std::pair<Kmer *, int> twoPair(readsWrapper.kmer[1], totalKmer);
-            pairs[2*i] = onePair;
-            pairs[2*i+1] = twoPair;
+            pairs[2*i] = std::pair<std::shared_ptr<Kmer>, int> (readsWrapper.kmer.first, totalKmer);
+            pairs[2*i+1] = std::pair<std::shared_ptr<Kmer>, int> (readsWrapper.kmer.second, totalKmer);
             loadCount++;
         }
 
@@ -154,25 +164,25 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
             PairedReadsWrapper *currentRead = &(readsVector[i]);
             uint32_t firstReadPosition = 0, secondReadPosition = 0;
             bool firstAlignmentForward = false, secondAlignmentForward = false;
-            int bestScore = -1 * (currentRead->read[0]->sequence.length()+currentRead->read[1]->sequence.length());
+            int bestScore = -1 * (currentRead->read.first->sequence.length()+currentRead->read.second->sequence.length());
             int score = bestScore;
-            for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments[0])) {
+            for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments.first)) {
                 if (firstPrediction.first >= mhIndices.size())
                     continue;
                 std::string key1 = "index-" + std::to_string(firstPrediction.first) + ".mh";
-                std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer[0], *(currentRead->totalKmer));
+                std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer.first, *(currentRead->totalKmers));
 
-                string firstReverse = reverseComplement(currentRead->read[0]->sequence);
-                currentRead->reversedRead[0] = std::auto_ptr<std::string>(new std::string(firstReverse));
+                string firstReverse = reverseComplement(currentRead->read.first->sequence);
+                currentRead->reversedRead.first.reset( new std::string(firstReverse) );
                 int totalKmers = 0;
-                currentRead->revKmer[0] = encodeWindow(firstReverse, &totalKmers);
-                std::set<Minhash::Neighbour> firstNegNeighbours = mhIndices[key1]->findNeighbours(currentRead->revKmer[0], *(currentRead->totalKmer));
+                currentRead->revKmer.first.reset( encodeWindow(firstReverse, &totalKmers) );
+                std::set<Minhash::Neighbour> firstNegNeighbours = mhIndices[key1]->findNeighbours(currentRead->revKmer.first, *(currentRead->totalKmers));
 
-                for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments[1])) {
+                for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments.second)) {
                     if (secondPrediction.first >= mhIndices.size() || abs(firstPrediction.first-secondPrediction.first)>1 )
                         continue;
                     std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
-                    std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer[1], *(currentRead->totalKmer));
+                    std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer.second, *(currentRead->totalKmers));
 
                     int firstPredictedSegment = firstPrediction.first, secondPredictedSegment = secondPrediction.first;
                     uint32_t firstPosition, secondPosition;
@@ -195,11 +205,11 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
                         }
                     }
 
-                    std::string secondReverse = reverseComplement(currentRead->read[1]->sequence);
-                    currentRead->reversedRead[1] = std::auto_ptr<std::string>(new std::string(secondReverse));
+                    std::string secondReverse = reverseComplement(currentRead->read.second->sequence);
+                    currentRead->reversedRead.second.reset( new std::string(secondReverse) );
                     int totalKmers = 0;
-                    currentRead->revKmer[1] = encodeWindow(secondReverse, &totalKmers);
-                    std::set<Minhash::Neighbour> secondNegNeighbours = mhIndices[key2]->findNeighbours(currentRead->revKmer[1], *(currentRead->totalKmer));
+                    currentRead->revKmer.second.reset( encodeWindow(secondReverse, &totalKmers) );
+                    std::set<Minhash::Neighbour> secondNegNeighbours = mhIndices[key2]->findNeighbours(currentRead->revKmer.second, *(currentRead->totalKmers));
                     firstStrandForward = true; secondStrandForward = false;
                     happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
                                                           secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
@@ -237,14 +247,10 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
                 }
             }
 
-            std::cout << currentRead->read[0]->key << std::endl;
+            std::cout << currentRead->read.first->key << std::endl;
             std::cout << "firstPosition: " << firstReadPosition << " forward:" << firstAlignmentForward
                       << " secondPosition: " << secondReadPosition << " forward: " << secondAlignmentForward << std::endl;
 
-        }
-
-        for (int i=0; i<loadCount; i++) {
-            readsVector[i].clear();
         }
         std::cout << loadCount << " done" << std::endl;
     }

@@ -44,7 +44,7 @@ public:
 
     // returns predictions for each row as set< pair<int,bool> >, meaning segment and strand(+|-). True means positive strand
     std::vector<std::set<std::pair<int, bool> > > inference(Tensor);
-    Tensor makeTensor(std::vector< std::pair<Kmer *, int> > pairs);
+    Tensor makeTensor(std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs);
     int getOutputShape();
     int getInputShape();
     int getK();

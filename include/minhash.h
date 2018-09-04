@@ -44,9 +44,9 @@ private:
 
     void init();
     void deinit();
-    std::map<Kmer,int> frequencifyShingles(Kmer* shingles, int len);
-    Kmer* computeMinHash(std::map<Kmer,int> shinglesWithFreq);
-    BandhashVar * computeBandHash(Kmer* minhash);
+    std::map<Kmer,int> frequencifyShingles(std::shared_ptr<Kmer> shingles, int len);
+    std::shared_ptr<Kmer> computeMinHash(std::map<Kmer,int> shinglesWithFreq);
+    std::shared_ptr<BandhashVar> computeBandHash(std::shared_ptr<Kmer> minhash);
     void writeOneIndexToFile(FILE *stream, std::vector<std::map<BandhashVar, std::set<DocID > > *> &index);
     void loadOneIndexFromFile(FILE *stream, std::vector<std::map<BandhashVar, std::set<DocID > > *> &index, int tb);
     float jaccard(uint32_t doc, Kmer* minhash);
@@ -79,9 +79,9 @@ public:
     };
 
     void addDocument(DocID id, std::string sequence);
-    void addDocument(DocID id, Kmer * document, int totalShingles);
+    void addDocument(DocID id, std::shared_ptr<Kmer> document, int totalShingles);
     std::set<Neighbour> findNeighbours(std::string sequence);
-    std::set<Neighbour> findNeighbours(Kmer* doc, int totalShingles);
+    std::set<Neighbour> findNeighbours(std::shared_ptr<Kmer> doc, int totalShingles);
 
     void serialize(FILE *stream);
     void deserialize(FILE *stream);
