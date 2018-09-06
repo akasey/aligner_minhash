@@ -33,7 +33,7 @@ std::mutex Minhash::mutex;
 
 void Minhash::init() {
     for (int i=0;i<totalBands; i++) {
-        index.push_back(std::shared_ptr< std::map<BandhashVar, std::set<DocID> > >(new std::map<BandhashVar, std::set<DocID> >()));
+        index.push_back(std::shared_ptr< std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > >(new std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >()));
     }
 }
 
@@ -141,14 +141,14 @@ void Minhash::addDocument(DocID id, std::shared_ptr<Kmer> shingles, int totalShi
 
     for(int i=0; i<totalBands; i++) {
         BandhashVar bandHash = bandhashes.get()[i];
-        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandHash);
+        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >::iterator found = index[i]->find(bandHash);
         if(found == index[i]->end()) {
-            std::set<DocID > a;
-            a.insert(id);
+            std::shared_ptr<std::set<DocID> > a;
+            a.get()->insert(id);
             (*index[i])[bandHash] = a;
         }
         else {
-            (*index[i])[bandHash].insert(id);
+            (*index[i])[bandHash]->insert(id);
         }
     }
 
@@ -172,10 +172,10 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shing
     std::map<int, int> neighbourhood; // record, hits
     for (int i=0; i<totalBands; i++) {
         BandhashVar bandHash = bandhashes.get()[i];
-        std::map<BandhashVar, std::set<DocID > >::iterator found = index[i]->find(bandHash);
+        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >::iterator found = index[i]->find(bandHash);
         if(found != index[i]->end()) {
-            for (std::set<DocID >::iterator it = found->second.begin();
-                 it != found->second.end(); ++it) {
+            std::set<DocID> *hashBand = found->second.get();
+            for (std::set<DocID>::iterator it = hashBand->begin(); it != hashBand->end(); it++) {
                 if (neighbourhood.find(*it) == neighbourhood.end())
                     neighbourhood[*it] = 1;
                 else
@@ -196,18 +196,18 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shing
 }
 
 
-void Minhash::writeOneIndexToFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > > &index) {
+void Minhash::writeOneIndexToFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index) {
     for (int i=0; i < totalBands; i++) {
-        std::map<BandhashVar, std::set<DocID > > *eachBand = index[i].get();
+        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > *eachBand = index[i].get();
         int size = eachBand->size();
         write_in_file((void *) &size, sizeof(int), 1, stream);
-        for (std::map<BandhashVar, std::set<DocID> >::iterator it=eachBand->begin(); it!=eachBand->end(); it++) {
+        for (std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >::iterator it=eachBand->begin(); it!=eachBand->end(); it++) {
             BandhashVar key = it->first;
-            std::set<DocID > value = it->second;
+            std::set<DocID > *value = it->second.get();
             write_in_file((void *) &key, sizeof(BandhashVar), 1, stream);
-            int sizeOfVector = value.size();
+            int sizeOfVector = value->size();
             write_in_file((void *) &sizeOfVector, sizeof(int), 1, stream);
-            for(std::set<DocID>::iterator itr=value.begin(); itr!=value.end(); itr++) {
+            for(std::set<DocID>::iterator itr=value->begin(); itr!=value->end(); itr++) {
                 DocID doc = *itr;
                 write_in_file((void *) &doc, sizeof(DocID), 1, stream);
             }
@@ -222,11 +222,12 @@ void Minhash::serialize(FILE *stream) {
     LOG(DEBUG) << "Serialization complete..";
 }
 
-void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > > &index, int tb) {
+void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index, int tb) {
     index.clear();
 
     for (int i=0; i<tb; i++) {
-        index.push_back(std::shared_ptr<std::map<BandhashVar, std::set<DocID > > >( new std::map<BandhashVar, std::set<DocID > >()) );
+        std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > > mapp =  std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > > (new std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > ());
+        index.push_back( mapp );
         int sizeOfMap = 0;
         read_from_file((void *) &sizeOfMap, sizeof(int), 1, stream);
         for(int j=0; j<sizeOfMap; j++) {
@@ -234,10 +235,14 @@ void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std
             read_from_file((void *) &key, sizeof(BandhashVar), 1, stream);
             int sizeOfValue = 0;
             read_from_file((void *) &sizeOfValue, sizeof(int), 1, stream);
+
+            std::shared_ptr<std::set<DocID> > sett = std::shared_ptr<std::set<DocID> >(new std::set<DocID> ());
+            (*index[i])[key] = sett;
+
             for (int k=0; k<sizeOfValue; k++) {
                 DocID doc;
                 read_from_file((void *) &doc, sizeof(DocID), 1, stream);
-                (*index[i])[key].insert(doc);
+                (*index[i])[key]->insert(doc);
             }
         }
     }
@@ -257,15 +262,15 @@ void Minhash::deserialize(std::string indexLocation) {
 }
 
 void Minhash::compareTest(Minhash &second) {
-    for(std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > >::iterator
+    for(std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > > >::iterator
                 itr1 = index.begin(), itr2 = second.index.begin(); itr1 != index.end(); itr1++, itr2++) {
-        std::map<BandhashVar, std::set<DocID > > * first = itr1->get();
-        std::map<BandhashVar, std::set<DocID > > * second = itr2->get();
+        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > * first = itr1->get();
+        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > * second = itr2->get();
 
-        for (std::map<BandhashVar, std::set<DocID > >::iterator itrr = first->begin(); itrr!=first->end(); itrr++) {
+        for (std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >::iterator itrr = first->begin(); itrr!=first->end(); itrr++) {
             BandhashVar key = itrr->first;
-            std::set<DocID > fromsecond = (*second)[key];
-            LOG(DEBUG) << (itrr->second == fromsecond ? "Equal sets" : "Not equal sets");
+            std::set<DocID > * fromsecond = (*second)[key].get();
+            LOG(DEBUG) << (*(itrr->second) == *fromsecond ? "Equal sets" : "Not equal sets");
         }
     }
 }
