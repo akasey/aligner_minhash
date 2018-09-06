@@ -40,6 +40,7 @@ private:
     std::map<DocID ,Kmer *> minhashStorage;
 #endif
     std::vector< std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > index;
+    std::vector< std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::vector<DocID> > > > > readOnlyIndex;
     static std::mutex mutex;
 
     void init();
@@ -48,7 +49,7 @@ private:
     std::shared_ptr<Kmer> computeMinHash(std::map<Kmer,int> shinglesWithFreq);
     std::shared_ptr<BandhashVar> computeBandHash(std::shared_ptr<Kmer> minhash);
     void writeOneIndexToFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index);
-    void loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index, int tb);
+    void loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::vector<DocID > > > > > &r_index, int tb);
     float jaccard(uint32_t doc, Kmer* minhash);
 
 

@@ -172,10 +172,12 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shing
     std::map<int, int> neighbourhood; // record, hits
     for (int i=0; i<totalBands; i++) {
         BandhashVar bandHash = bandhashes.get()[i];
-        std::map<BandhashVar, std::shared_ptr<std::set<DocID> > >::iterator found = index[i]->find(bandHash);
-        if(found != index[i]->end()) {
-            std::set<DocID> *hashBand = found->second.get();
-            for (std::set<DocID>::iterator it = hashBand->begin(); it != hashBand->end(); it++) {
+        std::map<BandhashVar, std::shared_ptr<std::vector<DocID> > >::iterator found = readOnlyIndex[i]->find(bandHash);
+        if(found != readOnlyIndex[i]->end()) {
+            std::vector<DocID> *hashBand = found->second.get();
+//            for (std::set<DocID>::iterator it = hashBand->begin(); it != hashBand->end(); it++) {
+            for (const DocID elem : *hashBand) {
+                const DocID *it = &elem;
                 if (neighbourhood.find(*it) == neighbourhood.end())
                     neighbourhood[*it] = 1;
                 else
@@ -222,11 +224,11 @@ void Minhash::serialize(FILE *stream) {
     LOG(DEBUG) << "Serialization complete..";
 }
 
-void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index, int tb) {
+void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::vector<DocID > > > > > &index, int tb) {
     index.clear();
 
     for (int i=0; i<tb; i++) {
-        std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > > mapp =  std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > > (new std::map<BandhashVar, std::shared_ptr<std::set<DocID> > > ());
+        std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::vector<DocID> > > > mapp =  std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::vector<DocID> > > > (new std::map<BandhashVar, std::shared_ptr<std::vector<DocID> > > ());
         index.push_back( mapp );
         int sizeOfMap = 0;
         read_from_file((void *) &sizeOfMap, sizeof(int), 1, stream);
@@ -236,13 +238,13 @@ void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std
             int sizeOfValue = 0;
             read_from_file((void *) &sizeOfValue, sizeof(int), 1, stream);
 
-            std::shared_ptr<std::set<DocID> > sett = std::shared_ptr<std::set<DocID> >(new std::set<DocID> ());
+            std::shared_ptr<std::vector<DocID> > sett = std::shared_ptr<std::vector<DocID> >(new std::vector<DocID> ());
             (*index[i])[key] = sett;
 
             for (int k=0; k<sizeOfValue; k++) {
                 DocID doc;
                 read_from_file((void *) &doc, sizeof(DocID), 1, stream);
-                (*index[i])[key]->insert(doc);
+                (*index[i])[key].get()->push_back(doc);
             }
         }
     }
@@ -251,7 +253,7 @@ void Minhash::deserialize(FILE *stream) {
     int tb = 0;
     read_from_file((void *) &tb, sizeof(int), 1, stream);
     totalBands = tb;
-    loadOneIndexFromFile(stream, index, tb);
+    loadOneIndexFromFile(stream, readOnlyIndex, tb);
     LOG(DEBUG) << "Deserialization complete..";
 }
 
