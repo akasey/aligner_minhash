@@ -33,14 +33,11 @@ std::mutex Minhash::mutex;
 
 void Minhash::init() {
     for (int i=0;i<totalBands; i++) {
-        index.push_back(new std::map<BandhashVar, std::set<DocID> >());
+        index.push_back(std::shared_ptr< std::map<BandhashVar, std::set<DocID> > >(new std::map<BandhashVar, std::set<DocID> >()));
     }
 }
 
 void Minhash::deinit() {
-    for (int i=0; i<totalBands; i++) {
-        delete index[i];
-    }
 #if MINHASH_STORAGE
     for (std::map<DocID , Kmer *>::iterator it=minhashStorage.begin(); it!=minhashStorage.end(); it++) {
         delete [] it->second;
@@ -199,9 +196,9 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shing
 }
 
 
-void Minhash::writeOneIndexToFile(FILE *stream, std::vector<std::map<BandhashVar, std::set<DocID > > *> &index) {
+void Minhash::writeOneIndexToFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > > &index) {
     for (int i=0; i < totalBands; i++) {
-        std::map<BandhashVar, std::set<DocID > > *eachBand = index[i];
+        std::map<BandhashVar, std::set<DocID > > *eachBand = index[i].get();
         int size = eachBand->size();
         write_in_file((void *) &size, sizeof(int), 1, stream);
         for (std::map<BandhashVar, std::set<DocID> >::iterator it=eachBand->begin(); it!=eachBand->end(); it++) {
@@ -225,14 +222,11 @@ void Minhash::serialize(FILE *stream) {
     LOG(DEBUG) << "Serialization complete..";
 }
 
-void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::map<BandhashVar, std::set<DocID > > *> &index, int tb) {
-    for (int i=0; i<index.size(); i++) {
-        delete index[i];
-    }
+void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > > &index, int tb) {
     index.clear();
 
     for (int i=0; i<tb; i++) {
-        index.push_back(new std::map<BandhashVar, std::set<DocID > >());
+        index.push_back(std::shared_ptr<std::map<BandhashVar, std::set<DocID > > >( new std::map<BandhashVar, std::set<DocID > >()) );
         int sizeOfMap = 0;
         read_from_file((void *) &sizeOfMap, sizeof(int), 1, stream);
         for(int j=0; j<sizeOfMap; j++) {
@@ -263,10 +257,10 @@ void Minhash::deserialize(std::string indexLocation) {
 }
 
 void Minhash::compareTest(Minhash &second) {
-    for(std::vector<std::map<BandhashVar, std::set<DocID > > *>::iterator
+    for(std::vector<std::shared_ptr<std::map<BandhashVar, std::set<DocID > > > >::iterator
                 itr1 = index.begin(), itr2 = second.index.begin(); itr1 != index.end(); itr1++, itr2++) {
-        std::map<BandhashVar, std::set<DocID > > * first = *itr1;
-        std::map<BandhashVar, std::set<DocID > > * second = *itr2;
+        std::map<BandhashVar, std::set<DocID > > * first = itr1->get();
+        std::map<BandhashVar, std::set<DocID > > * second = itr2->get();
 
         for (std::map<BandhashVar, std::set<DocID > >::iterator itrr = first->begin(); itrr!=first->end(); itrr++) {
             BandhashVar key = itrr->first;

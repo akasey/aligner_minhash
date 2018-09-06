@@ -169,5 +169,6 @@ int main(int argc, const char* argv[]) {
     for (std::map<std::string, Minhash *>::iterator itr = mhIndices.begin(); itr != mhIndices.end(); itr++) {
         delete itr->second;
     }
+    inferEngine.close();
     return 0;
 }

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <set>
+#include <memory>
 #include <vector>
 #include <map>
 #include <exception>

@@ -40,6 +40,7 @@ private:
 public:
     TensorflowInference(std::string inputGraph, TF_MetaParser &tf_meta, int numThreads);
     ~TensorflowInference();
+    void close();
 //    TensorflowInference(const TensorflowInference &p2); // copy constructor
 
     // returns predictions for each row as set< pair<int,bool> >, meaning segment and strand(+|-). True means positive strand

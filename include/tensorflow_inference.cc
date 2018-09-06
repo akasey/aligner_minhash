@@ -23,7 +23,6 @@ TensorflowInference::TensorflowInference(std::string graph_pb, TF_MetaParser &tf
 }
 
 TensorflowInference::~TensorflowInference() {
-    session->Close();
 }
 
 // Reads a model graph definition from disk, and creates a session object you
@@ -156,4 +155,8 @@ int TensorflowInference::getInputShape() {
 
 int TensorflowInference::getK() {
     return K;
+}
+
+void TensorflowInference::close() {
+    session->Close();
 }

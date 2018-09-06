@@ -13,6 +13,7 @@
 #include "include/indexer_jobparser.h"
 #include "include/priorityqueue_wrapper.h"
 
+#define DEBUG_MODE 0
 
 struct ReadsWrapper{
     std::shared_ptr<InputRead> read;
@@ -109,7 +110,8 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
             readsWrapper.kmer.reset( encodeWindow((readsWrapper.read)->sequence, &totalKmers) );
             readsWrapper.totalKmers.reset( new int(totalKmers) );
             readsVector[i] = readsWrapper;
-            pairs[i] = std::pair<std::shared_ptr<Kmer>, int> (readsVector[i].kmer, totalKmers);
+            std::pair<std::shared_ptr<Kmer>, int> onePair = { readsVector[i].kmer, totalKmers };
+            pairs[i] = onePair;
             loadCount++;
         }
 
