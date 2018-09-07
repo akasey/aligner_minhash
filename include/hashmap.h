@@ -50,7 +50,7 @@ public:
     //If key is not found, function returns false
     bool find(const K &key, V &value) const {
         // A shared mutex is used to enable mutiple concurrent reads
-        std::unique_lock<std::mutex> lock(mutex_);
+//        std::unique_lock<std::mutex> lock(mutex_);
         HashNode<K, V> *node = head;
 
         while (node != nullptr) {

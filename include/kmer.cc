@@ -13,13 +13,20 @@ extern const Kmer POSSIBLE_KMER_SIZE = pow(4,KMER_K);
 static uint8_t numbifyNt(char a) {
     switch(a) {
         case 'A':
+        case 'a':
             return 0;
         case 'C':
+        case 'c':
             return 1;
         case 'G':
+        case 'g':
             return 2;
         case 'T':
+        case 't':
             return 3;
+        case 'N':
+        case 'n':
+            return rand() % 4;
     }
     return -123;
 }
@@ -83,12 +90,16 @@ std::string reverseComplement(std::string sequence) {
             [](char n) {
                 switch(n) {
                     case 'A':
+                    case 'a':
                         return 'T';
                     case 'T':
+                    case 't':
                         return 'A';
                     case 'G':
+                    case 'g':
                         return 'C';
                     case 'C':
+                    case 'c':
                         return 'G';
                     default:
                         return n;
