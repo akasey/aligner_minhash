@@ -47,3 +47,5 @@ target_link_libraries(inference_test ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(playground tests/PlayGround.cc include/priorityqueue_wrapper.cc include/minhash.cc include/common.cc include/kmer.cc)
 target_link_libraries(playground SswCC::Static)
+
+add_executable(fixed_array_test tests/FixedArrayTest.cc include/common.cc)
