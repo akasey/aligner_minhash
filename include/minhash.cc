@@ -172,10 +172,9 @@ std::set<Minhash::Neighbour> Minhash::findNeighbours(std::shared_ptr<Kmer> shing
     std::map<int, int> neighbourhood; // record, hits
     for (int i=0; i<totalBands; i++) {
         BandhashVar bandHash = bandhashes.get()[i];
-        std::map<BandhashVar, std::shared_ptr<FixedArray<DocID> > >::iterator found = readOnlyIndex[i]->find(bandHash);
+        std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID> > >::iterator found = readOnlyIndex[i]->find(bandHash);
         if(found != readOnlyIndex[i]->end()) {
             FixedArray<DocID> *hashBand = found->second.get();
-//            for (std::set<DocID>::iterator it = hashBand->begin(); it != hashBand->end(); it++) {
             for (int i=0; i<hashBand->size(); i++) {
                 DocID doc = hashBand->at(i);
                 const DocID *it = &doc;
@@ -225,12 +224,14 @@ void Minhash::serialize(FILE *stream) {
     LOG(DEBUG) << "Serialization complete..";
 }
 
-void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<FixedArray<DocID > > > > > &index, int tb) {
+void Minhash::loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID > > > > > &index, int tb) {
     index.clear();
+    index.reserve(tb);
 
     for (int i=0; i<tb; i++) {
-        std::shared_ptr<std::map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > mapp =  std::shared_ptr<std::map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > (new std::map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > ());
-        index.push_back( mapp );
+        std::shared_ptr<std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > mapp =
+                std::shared_ptr<std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > (new std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > ());
+        index.push_back(mapp);
         int sizeOfMap = 0;
         read_from_file((void *) &sizeOfMap, sizeof(int), 1, stream);
         for(int j=0; j<sizeOfMap; j++) {

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <iostream>
 #include <mutex>
+#include <unordered_map>
 
 #include "common.h"
 #include "kmer.h"
@@ -41,7 +42,7 @@ private:
     std::map<DocID ,Kmer *> minhashStorage;
 #endif
     std::vector< std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > index;
-    std::vector< std::shared_ptr<std::map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > > readOnlyIndex;
+    std::vector< std::shared_ptr<std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID> > > > > readOnlyIndex;
     static std::mutex mutex;
 
     void init();
@@ -50,7 +51,7 @@ private:
     std::shared_ptr<Kmer> computeMinHash(std::map<Kmer,int> shinglesWithFreq);
     std::shared_ptr<BandhashVar> computeBandHash(std::shared_ptr<Kmer> minhash);
     void writeOneIndexToFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<std::set<DocID > > > > > &index);
-    void loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::map<BandhashVar, std::shared_ptr<FixedArray<DocID > > > > > &r_index, int tb);
+    void loadOneIndexFromFile(FILE *stream, std::vector<std::shared_ptr<std::unordered_map<BandhashVar, std::shared_ptr<FixedArray<DocID > > > > > &r_index, int tb);
     float jaccard(uint32_t doc, Kmer* minhash);
 
 

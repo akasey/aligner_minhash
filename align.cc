@@ -28,7 +28,7 @@ std::map<std::string, std::string> processArguments(int argc, const char *argv[]
     std::string samFile = "";
     std::string mode = "single";
     int nThreads = 4;
-    int tfBatchSize = 5;
+    int tfBatchSize = 1000;
 
     std::string wholeCommand = "";
     for (int i=0; i<argc; i++) {
@@ -159,6 +159,7 @@ int main(int argc, const char* argv[]) {
         std::cout << mhIndices[base]-> filename  << " " << base << std::endl;
     }*/
 
+    LOG(INFO) << "Output SAM: " << arguments["output"];
     if (arguments["mode"].compare("single") == 0) {
         align_single(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter);
     }
