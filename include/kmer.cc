@@ -68,8 +68,8 @@ Kmer * encodeWindow(std::string window, int *totalKmers, int K) {
  * Computes sliding windows of size `windowLength` from given `segment` jumping `strides` characters in each window.
  * @return
  */
-std::map<int, std::string> makeSlidingWindow(std::string &segment, int startLocation, int windowLength, int strides) {
-    std::map<int, std::string> windows;
+std::unordered_map<int, std::string> makeSlidingWindow(std::string &segment, int startLocation, int windowLength, int strides) {
+    std::unordered_map<int, std::string> windows;
     int end_coord = segment.length() - windowLength;
     for (int start=0; ; start = std::min(start+strides, end_coord) ) {
         std::string sub = segment.substr(start, windowLength);

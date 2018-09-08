@@ -72,10 +72,10 @@ std::shared_ptr<Kmer> Minhash::computeMinHash(std::map<Kmer,int> shinglesWithFre
     for (std::map<Kmer,int>::iterator itr = shinglesWithFreq.begin(); itr!=shinglesWithFreq.end(); ++itr) {
         // initial shift value
         Kmer x = itr->first;
-        srand(x);
+        uint32_t seed = x;
         for (int j=0; j<numHashes; j++){
             for (int k=0; k<itr->second; k++){
-                x = rand() % MAX_UINT;
+                x = rand_r(&seed) % MAX_UINT;
                 if (x < bestMinimum[j]) {
                     hashes.get()[j] = itr->first;
                     bestMinimum[j] = x;
@@ -136,9 +136,7 @@ void Minhash::addDocument(DocID id, std::string sequence) {
 void Minhash::addDocument(DocID id, std::shared_ptr<Kmer> shingles, int totalShingles) {
     std::map<Kmer,int> shinglesWithFreq = frequencifyShingles(shingles, totalShingles);
 
-    mutex.lock();
     std::shared_ptr<Kmer> minhash = computeMinHash(shinglesWithFreq);
-    mutex.unlock();
     std::shared_ptr<BandhashVar> bandhashes = computeBandHash(minhash);
 
     for(int i=0; i<totalBands; i++) {
