@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <math.h>
+#include <mutex>
 #include "fastamm.h"
 #include "ssw.h"
 #include "ssw_cpp.h"
@@ -55,6 +56,7 @@ public:
 private:
     Mode mode;
     std::ofstream file;
+    std::mutex mutex;
     static StripedSmithWaterman::Aligner aligner;
     static StripedSmithWaterman::Filter filter;
 

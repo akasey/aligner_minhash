@@ -95,10 +95,94 @@ inline void makeUnmapped(ReadsWrapper *currentRead, SamWriter::Alignment &retAli
     retAlignment.flag = retAlignment.flag | SEGMENT_UNMAPPED;
 }
 
+SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde) {
+    ReadsWrapper *currentRead = &eachRead;
+    PriorityQueueWrapper queueWrapper;
+    SamWriter::Alignment bestAlignment;
+    int bestScore = -1 * (currentRead->read->sequence.length());
+    int score = 0;
+
+    for (std::set<std::pair<int, bool> >::iterator itrr = currentRead->predictedSegments->begin();
+         itrr != currentRead->predictedSegments->end(); itrr++) {
+        std::pair<int, bool> pair = *itrr;
+        std::string key = "index-" + std::to_string(pair.first) + ".mh";
+        if (pair.first < mhIndices.size()) {
+            int partition = pair.first;
+
+            std::set<Minhash::Neighbour> posNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->kmer, *(currentRead->totalKmers));
+#if DEBUG_MODE
+            LOG(INFO) << "+ve Minhash Neigbours: " << posNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
+#endif
+            SamWriter::Alignment alignment;
+            bool forwardStrand = true;
+            bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
+                                            referenceGenomeBrigde.getWindowLength(), &alignment, &score);
+            if (!happy) {
+                queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
+            }
+            else if (score > bestScore) {
+                bestAlignment = alignment;
+                bestScore = score;
+                continue;
+            }
+
+
+            // Also try first of reverse strand
+            std::string reverse = reverseComplement(currentRead->read->sequence);
+            currentRead->reverseRead.reset( new std::string(reverse) );
+            int totalKmers = 0;
+            currentRead->revKmer.reset( encodeWindow(reverse, &totalKmers) );
+            forwardStrand = false;
+
+            SamWriter::Alignment negAlignment;
+            std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
+#if DEBUG_MODE
+            LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
+#endif
+            happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred,
+                                       referenceGenomeBrigde.getWindowLength(), &negAlignment, &score);
+            if (!happy) {
+                queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
+            }
+            else {
+                if (score > bestScore) {
+                    bestAlignment = negAlignment;
+                    bestScore = score;
+                }
+                continue;
+            }
+
+        }
+#if DEBUG_MODE
+        else {
+                    LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
+                }
+#endif
+    }
+
+    int counter = 0;
+    while(queueWrapper.hasNext() && counter++ < 10) {
+        int partition; bool forwardStrand; Minhash::Neighbour neighbour;
+        queueWrapper.pop(&partition, &forwardStrand, &neighbour);
+        SamWriter::Alignment retAlignment; int retScore;
+        bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, referenceGenomeBrigde.getWindowLength(),
+                                           &retAlignment, &retScore);
+        if (happy && retScore > bestScore) {
+            bestAlignment = retAlignment;
+            bestScore = score;
+        }
+    }
+    if ( bestAlignment.qname.compare("*")==0 ) { // means no mapping found
+        makeUnmapped(currentRead, bestAlignment);
+    }
+    return bestAlignment;
+}
+
 void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference &inferEngine,
                   std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
-                  SamWriter &samWriter) {
+                  SamWriter &samWriter, int nThreads) {
     FastQ fastq(fastqFile);
+
     while (fastq.hasNext()) {
         std::vector<ReadsWrapper > readsVector(tfBatchSize);
         std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs(tfBatchSize);
@@ -116,88 +200,17 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
         }
 
         prediction(inferEngine, readsVector, pairs, loadCount);
+        pairs.clear();
 
-        for (int i=0; i<loadCount; i++) {
-            PriorityQueueWrapper queueWrapper;
-            ReadsWrapper *currentRead = &(readsVector[i]);
-            SamWriter::Alignment bestAlignment;
-            int bestScore = -1 * (currentRead->read->sequence.length());
-            int score = 0;
-
-            for (std::set<std::pair<int, bool> >::iterator itrr = currentRead->predictedSegments->begin();
-                    itrr != currentRead->predictedSegments->end(); itrr++) {
-                std::pair<int, bool> pair = *itrr;
-                std::string key = "index-" + std::to_string(pair.first) + ".mh";
-                if (pair.first < mhIndices.size()) {
-                    int partition = pair.first;
-
-                    std::set<Minhash::Neighbour> posNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->kmer, *(currentRead->totalKmers));
-#if DEBUG_MODE
-                    LOG(INFO) << "+ve Minhash Neigbours: " << posNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
-#endif
-                    SamWriter::Alignment alignment;
-                    bool forwardStrand = true;
-                    bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
-                                                    referenceGenomeBrigde.getWindowLength(), &alignment, &score);
-                    if (!happy) {
-                        queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
-                    }
-                    else if (score > bestScore) {
-                        bestAlignment = alignment;
-                        bestScore = score;
-                        continue;
-                    }
-
-
-                    // Also try first of reverse strand
-                    std::string reverse = reverseComplement(currentRead->read->sequence);
-                    currentRead->reverseRead.reset( new std::string(reverse) );
-                    int totalKmers = 0;
-                    currentRead->revKmer.reset( encodeWindow(reverse, &totalKmers) );
-                    forwardStrand = false;
-
-                    SamWriter::Alignment negAlignment;
-                    std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
-#if DEBUG_MODE
-                    LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
-#endif
-                    happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred,
-                                               referenceGenomeBrigde.getWindowLength(), &negAlignment, &score);
-                    if (!happy) {
-                        queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
-                    }
-                    else {
-                        if (score > bestScore) {
-                            bestAlignment = negAlignment;
-                            bestScore = score;
-                        }
-                        continue;
-                    }
-
-                }
-#if DEBUG_MODE
-                else {
-                    LOG(ERROR) << currentRead->read->key << " predicted as " << std::to_string(pair.first);
-                }
-#endif
+        {
+            ThreadPool threadPool(nThreads);
+            for (int i = 0; i < loadCount; i++) {
+                ReadsWrapper eachRead = readsVector[i];
+                threadPool.enqueue([eachRead, &mhIndices, &referenceGenomeBrigde, &samWriter] {
+                    SamWriter::Alignment bestAlignment = alignOne(eachRead, mhIndices, referenceGenomeBrigde);
+                    samWriter.writeAlignment(bestAlignment);
+                });
             }
-
-            int counter = 0;
-            while(queueWrapper.hasNext() && counter++ < 10) {
-                int partition; bool forwardStrand; Minhash::Neighbour neighbour;
-                queueWrapper.pop(&partition, &forwardStrand, &neighbour);
-                SamWriter::Alignment retAlignment; int retScore;
-                bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, referenceGenomeBrigde.getWindowLength(),
-                                                   &retAlignment, &retScore);
-                if (happy && retScore > bestScore) {
-                    bestAlignment = retAlignment;
-                    bestScore = score;
-                }
-            }
-            if ( bestAlignment.qname.compare("*")==0 ) { // means no mapping found
-                makeUnmapped(currentRead, bestAlignment);
-            }
-            samWriter.writeAlignment(bestAlignment);
         }
 
         LOG(INFO) << loadCount << " finished..";

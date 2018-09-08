@@ -15,10 +15,10 @@
 
 void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference &inferEngine,
                   std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
-                  SamWriter &samWriter);
+                  SamWriter &samWriter, int nThreads);
 void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference &inferEngine,
                   std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
-                  SamWriter &samWriter);
+                  SamWriter &samWriter, int nThreads);
 
 std::map<std::string, std::string> processArguments(int argc, const char *argv[]) {
     std::string tfModelDir = "" ;
@@ -161,10 +161,10 @@ int main(int argc, const char* argv[]) {
 
     LOG(INFO) << "Output SAM: " << arguments["output"];
     if (arguments["mode"].compare("single") == 0) {
-        align_single(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter);
+        align_single(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter, nThreads);
     }
     else if (arguments["mode"].compare("paired") == 0) {
-        align_paired(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter);
+        align_paired(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter, nThreads);
     }
 
     for (std::map<std::string, Minhash *>::iterator itr = mhIndices.begin(); itr != mhIndices.end(); itr++) {

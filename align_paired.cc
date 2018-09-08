@@ -6,6 +6,7 @@
 #include "include/tensorflow_inference.h"
 #include "include/indexer_jobparser.h"
 #include "include/minhash.h"
+#include "include/ThreadPool.h"
 #include "include/sam_writer.h"
 #include "include/input_reader.h"
 #include "include/fastaQ.h"
@@ -112,9 +113,111 @@ inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<Paire
     predictions.clear();
 }
 
+std::string alignOne_paired(PairedReadsWrapper eachRead, std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde) {
+    PairedPriorityQueueWrapper queueWrapper;
+    PairedReadsWrapper *currentRead = &eachRead;
+    uint32_t firstReadPosition = 0, secondReadPosition = 0;
+    bool firstAlignmentForward = false, secondAlignmentForward = false;
+    int bestScore = -1 * (currentRead->read.first->sequence.length()+currentRead->read.second->sequence.length());
+    int score = bestScore;
+    for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments.first)) {
+        if (firstPrediction.first >= mhIndices.size())
+            continue;
+        std::string key1 = "index-" + std::to_string(firstPrediction.first) + ".mh";
+        std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer.first, *(currentRead->totalKmers));
+
+        string firstReverse = reverseComplement(currentRead->read.first->sequence);
+        currentRead->reversedRead.first.reset( new std::string(firstReverse) );
+        int totalKmers = 0;
+        currentRead->revKmer.first.reset( encodeWindow(firstReverse, &totalKmers) );
+        std::set<Minhash::Neighbour> firstNegNeighbours = mhIndices[key1]->findNeighbours(currentRead->revKmer.first, *(currentRead->totalKmers));
+
+        for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments.second)) {
+            if (secondPrediction.first >= mhIndices.size() || abs(firstPrediction.first-secondPrediction.first)>1 )
+                continue;
+            std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
+            std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer.second, *(currentRead->totalKmers));
+
+            int firstPredictedSegment = firstPrediction.first, secondPredictedSegment = secondPrediction.first;
+            uint32_t firstPosition, secondPosition;
+            bool firstStrandForward = false, secondStrandForward = true;
+
+            bool happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
+                                                  secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
+                                                  firstNegNeighbours, secondPosNeighbours,
+                                                  referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+            if (!happy) {
+                queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstNegNeighbours, secondPrediction.first, secondStrandForward, &secondPosNeighbours);
+            }
+            else {
+                if (score > bestScore) {
+                    firstReadPosition = firstPosition;
+                    secondReadPosition = secondPosition;
+                    firstAlignmentForward = firstStrandForward; secondAlignmentForward = secondStrandForward;
+                    bestScore = score;
+                    continue;
+                }
+            }
+
+            std::string secondReverse = reverseComplement(currentRead->read.second->sequence);
+            currentRead->reversedRead.second.reset( new std::string(secondReverse) );
+            int totalKmers = 0;
+            currentRead->revKmer.second.reset( encodeWindow(secondReverse, &totalKmers) );
+            std::set<Minhash::Neighbour> secondNegNeighbours = mhIndices[key2]->findNeighbours(currentRead->revKmer.second, *(currentRead->totalKmers));
+            firstStrandForward = true; secondStrandForward = false;
+            happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
+                                             secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
+                                             firstPosNeighbours, secondNegNeighbours,
+                                             referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+            if (!happy) {
+                queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstPosNeighbours, secondPrediction.first, secondStrandForward, &secondNegNeighbours);
+            }
+            else {
+                if (score > bestScore) {
+                    firstReadPosition = firstPosition;
+                    secondReadPosition = secondPosition;
+                    firstAlignmentForward = firstStrandForward; secondAlignmentForward = secondStrandForward;
+                    bestScore = score;
+                    continue;
+                }
+            }
+        }
+    }
+
+    while (queueWrapper.hasNext()) {
+        uint32_t firstPosition, secondPosition;
+        int firstPartition; bool firstForwardStrand; Minhash::Neighbour firstNeighbour;
+        int secondPartition; bool secondForwardStrand; Minhash::Neighbour secondNeighbour;
+        queueWrapper.pop(&firstPartition, &firstForwardStrand, &firstNeighbour,
+                         &secondPartition, &secondForwardStrand, &secondNeighbour);
+        bool happy = alignPairedMinhashNeighbour(currentRead, firstPartition, firstForwardStrand,
+                                                 secondPartition, secondForwardStrand, &referenceGenomeBrigde,
+                                                 firstNeighbour, secondNeighbour,
+                                                 referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+        if (happy) {
+            firstReadPosition = firstPosition; secondReadPosition = secondPosition;
+            firstAlignmentForward = firstForwardStrand; secondAlignmentForward = secondForwardStrand;
+            break;
+        }
+    }
+
+    std::stringstream stringstream;
+    stringstream << currentRead->read.first->key << std::endl;
+    stringstream << "firstPosition: " << firstReadPosition << " forward:" << firstAlignmentForward
+              << " secondPosition: " << secondReadPosition << " forward: " << secondAlignmentForward << std::endl;
+    return stringstream.str();
+
+}
+
+std::mutex mutex;
+void dealWithAlignment(std::string &alignment) {
+    std::unique_lock<std::mutex> lock (mutex);
+    std::cout << alignment;
+}
+
 void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference &inferEngine,
                   std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
-                  SamWriter &samWriter) {
+                  SamWriter &samWriter, int nThreads) {
     std::vector<std::string> files = split(fastqFiles, ",");
     if (files.size() != 2) {
         throw new InputReaderException("paired alignment files should be \"<1stFile>,<2ndFile>\"");
@@ -144,113 +247,17 @@ void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference
         }
 
         pairedPrediction(inferEngine, readsVector, pairs, loadCount);
+        pairs.clear();
 
-#if 0
-        for (int i=0; i<loadCount; i++) {
-            PairedReadsWrapper *currentRead = &(readsVector[i]);
-            for (int j=0; j<2; j++) {
-                std::cout << j << "th ";
-                for (auto lacasito : *(currentRead->predictedSegments[j])) {
-                    std::cout << lacasito.first << " ";
-                }
+        {
+            ThreadPool threadPool(nThreads);
+            for (int i = 0; i < loadCount; i++) {
+                PairedReadsWrapper eachRead = readsVector[i];
+                threadPool.enqueue([eachRead, &mhIndices, &referenceGenomeBrigde, &samWriter] {
+                    std::string alignment = alignOne_paired(eachRead, mhIndices, referenceGenomeBrigde);
+                    dealWithAlignment(alignment);
+                });
             }
-            std::cout << " \n";
-        }
-        continue;
-#endif
-
-        PairedPriorityQueueWrapper queueWrapper;
-        for (int i=0; i<loadCount; i++) {
-            PairedReadsWrapper *currentRead = &(readsVector[i]);
-            uint32_t firstReadPosition = 0, secondReadPosition = 0;
-            bool firstAlignmentForward = false, secondAlignmentForward = false;
-            int bestScore = -1 * (currentRead->read.first->sequence.length()+currentRead->read.second->sequence.length());
-            int score = bestScore;
-            for (std::pair<int, bool> firstPrediction : *(currentRead->predictedSegments.first)) {
-                if (firstPrediction.first >= mhIndices.size())
-                    continue;
-                std::string key1 = "index-" + std::to_string(firstPrediction.first) + ".mh";
-                std::set<Minhash::Neighbour> firstPosNeighbours = mhIndices[key1]->findNeighbours(currentRead->kmer.first, *(currentRead->totalKmers));
-
-                string firstReverse = reverseComplement(currentRead->read.first->sequence);
-                currentRead->reversedRead.first.reset( new std::string(firstReverse) );
-                int totalKmers = 0;
-                currentRead->revKmer.first.reset( encodeWindow(firstReverse, &totalKmers) );
-                std::set<Minhash::Neighbour> firstNegNeighbours = mhIndices[key1]->findNeighbours(currentRead->revKmer.first, *(currentRead->totalKmers));
-
-                for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments.second)) {
-                    if (secondPrediction.first >= mhIndices.size() || abs(firstPrediction.first-secondPrediction.first)>1 )
-                        continue;
-                    std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
-                    std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer.second, *(currentRead->totalKmers));
-
-                    int firstPredictedSegment = firstPrediction.first, secondPredictedSegment = secondPrediction.first;
-                    uint32_t firstPosition, secondPosition;
-                    bool firstStrandForward = false, secondStrandForward = true;
-
-                    bool happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
-                                                          secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
-                                                          firstNegNeighbours, secondPosNeighbours,
-                                    referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
-                    if (!happy) {
-                        queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstNegNeighbours, secondPrediction.first, secondStrandForward, &secondPosNeighbours);
-                    }
-                    else {
-                        if (score > bestScore) {
-                            firstReadPosition = firstPosition;
-                            secondReadPosition = secondPosition;
-                            firstAlignmentForward = firstStrandForward; secondAlignmentForward = secondStrandForward;
-                            bestScore = score;
-                            continue;
-                        }
-                    }
-
-                    std::string secondReverse = reverseComplement(currentRead->read.second->sequence);
-                    currentRead->reversedRead.second.reset( new std::string(secondReverse) );
-                    int totalKmers = 0;
-                    currentRead->revKmer.second.reset( encodeWindow(secondReverse, &totalKmers) );
-                    std::set<Minhash::Neighbour> secondNegNeighbours = mhIndices[key2]->findNeighbours(currentRead->revKmer.second, *(currentRead->totalKmers));
-                    firstStrandForward = true; secondStrandForward = false;
-                    happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
-                                                          secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
-                                                          firstPosNeighbours, secondNegNeighbours,
-                                                          referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
-                    if (!happy) {
-                        queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstPosNeighbours, secondPrediction.first, secondStrandForward, &secondNegNeighbours);
-                    }
-                    else {
-                        if (score > bestScore) {
-                            firstReadPosition = firstPosition;
-                            secondReadPosition = secondPosition;
-                            firstAlignmentForward = firstStrandForward; secondAlignmentForward = secondStrandForward;
-                            bestScore = score;
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            while (queueWrapper.hasNext()) {
-                uint32_t firstPosition, secondPosition;
-                int firstPartition; bool firstForwardStrand; Minhash::Neighbour firstNeighbour;
-                int secondPartition; bool secondForwardStrand; Minhash::Neighbour secondNeighbour;
-                queueWrapper.pop(&firstPartition, &firstForwardStrand, &firstNeighbour,
-                                 &secondPartition, &secondForwardStrand, &secondNeighbour);
-                bool happy = alignPairedMinhashNeighbour(currentRead, firstPartition, firstForwardStrand,
-                                                 secondPartition, secondForwardStrand, &referenceGenomeBrigde,
-                                                 firstNeighbour, secondNeighbour,
-                                                 referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
-                if (happy) {
-                    firstReadPosition = firstPosition; secondReadPosition = secondPosition;
-                    firstAlignmentForward = firstForwardStrand; secondAlignmentForward = secondForwardStrand;
-                    break;
-                }
-            }
-
-            std::cout << currentRead->read.first->key << std::endl;
-            std::cout << "firstPosition: " << firstReadPosition << " forward:" << firstAlignmentForward
-                      << " secondPosition: " << secondReadPosition << " forward: " << secondAlignmentForward << std::endl;
-
         }
         std::cout << loadCount << " done" << std::endl;
     }

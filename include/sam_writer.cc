@@ -79,6 +79,7 @@ int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWr
 }
 
 void SamWriter::writeAlignment(Alignment &alignment) {
+    std::unique_lock<std::mutex> lock(mutex);
     file << alignment.qname << "\t"
         << unsigned(alignment.flag) << "\t"
         << alignment.rname << "\t"
