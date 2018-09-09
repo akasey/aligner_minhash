@@ -45,7 +45,9 @@ add_executable(inference_test tests/TensorflowInferenceTest.cc include/minhash.c
 target_link_libraries(inference_test TensorflowCC::Static)
 target_link_libraries(inference_test ${CMAKE_THREAD_LIBS_INIT})
 
-add_executable(playground tests/PlayGround.cc include/priorityqueue_wrapper.cc include/minhash.cc include/common.cc include/kmer.cc)
+add_executable(playground tests/PlayGround.cc include/priorityqueue_wrapper.cc include/minhash.cc include/common.cc include/kmer.cc include/tf_metaparser.cc include/tensorflow_inference.cc)
 target_link_libraries(playground SswCC::Static)
+target_link_libraries(playground TensorflowCC::Static)
+target_link_libraries(playground ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(fixed_array_test tests/FixedArrayTest.cc include/common.cc)

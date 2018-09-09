@@ -52,8 +52,8 @@ int createEachMinhashIndex(std::string &baseDirectory, const int segId, std::pai
     int strides = KMER_K -1;
     Minhash mh;
     int startingPoint = segmentPair.first;
-    std::map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
-    for (std::map<int, std::string>::iterator itr=slidingWindows.begin(); itr!=slidingWindows.end(); itr++) {
+    std::unordered_map<int, std::string> slidingWindows = makeSlidingWindow(segmentPair.second, startingPoint, windowLen, strides);
+    for (std::unordered_map<int, std::string>::iterator itr=slidingWindows.begin(); itr!=slidingWindows.end(); itr++) {
         mh.addDocument(itr->first, itr->second);
     }
     std::string filename = baseDirectory +"/indices/index-" + std::to_string(segId) + ".mh";
