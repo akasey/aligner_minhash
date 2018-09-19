@@ -19,6 +19,9 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
 void align_paired(std::string &fastqFiles, int &tfBatchSize, TensorflowInference &inferEngine,
                   std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
                   SamWriter &samWriter, int nThreads);
+void align_long(std::string &fastqFile, int &tfBatchSize, TensorflowInference &inferEngine,
+                std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde,
+                SamWriter &samWriter, int nThreads);
 
 std::map<std::string, std::string> processArguments(int argc, const char *argv[]) {
     std::string tfModelDir = "" ;
@@ -42,7 +45,8 @@ std::map<std::string, std::string> processArguments(int argc, const char *argv[]
             ("i,minhash_dir", "Directory where all index-xx.mh files are located", cxxopts::value<std::string>(mhIndexDir), "Minhash index dir")
             ("r,genome_dir", "Directory where sequence.fasta, classify_detail.log are located", cxxopts::value<std::string>(referenceGenomeDir), "Reference genome dir")
             ("f,fastq", "Input FastQ file for aligning", cxxopts::value<std::string>(fastqFile), "FastQ file")
-            ("mode", "Single or Paired alignment", cxxopts::value<std::string>(mode), "[single|paired]")
+            ("mode", "Single or Paired or Long alignment", cxxopts::value<std::string>(mode), "[single|paired|long]")
+            ("batch", "Batch size", cxxopts::value<int>(tfBatchSize), "batch size for TF..")
             ("o,output", "Output SamFile", cxxopts::value<std::string>(samFile), "Sam file");
 
 
@@ -62,8 +66,8 @@ std::map<std::string, std::string> processArguments(int argc, const char *argv[]
         exit(-1);
     }
 
-    if (mode.compare("single") != 0 && mode.compare("paired") != 0) {
-        std::cerr << "mode: [single|paired]\n";
+    if (mode.compare("single") != 0 && mode.compare("paired") != 0 && mode.compare("long") != 0) {
+        std::cerr << "mode: [single|paired|long]\n";
         std::cerr << options.help() << std::endl;
         exit(-1);
     }
@@ -165,6 +169,9 @@ int main(int argc, const char* argv[]) {
     }
     else if (arguments["mode"].compare("paired") == 0) {
         align_paired(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter, nThreads);
+    }
+    else if (arguments["mode"].compare("long") == 0) {
+        align_long(arguments["fastq"], tfBatchSize, inferEngine, mhIndices, referenceGenomeBrigde, samWriter, nThreads);
     }
 
     for (std::map<std::string, Minhash *>::iterator itr = mhIndices.begin(); itr != mhIndices.end(); itr++) {

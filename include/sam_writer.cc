@@ -36,7 +36,7 @@ void SamWriter::writeHeaders(std::vector <SamWriter::Header> &headers) {
 }
 
 
-int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWriter::Alignment *returnAlignment) {
+int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWriter::Alignment *returnAlignment, int *num_mismatches) {
     int32_t maskLen = strlen(read.c_str())/2;
     maskLen = maskLen < 15 ? 15 : maskLen;
     StripedSmithWaterman::Alignment alignment;
@@ -48,6 +48,7 @@ int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWr
     returnAlignment->pos = alignment.ref_begin + 1;
 
     returnAlignment->seq = std::string(read);
+    *num_mismatches = alignment.mismatches;
 /*
     // All below for alignment SEQ....
     char alignSEQ[read.length()+1];

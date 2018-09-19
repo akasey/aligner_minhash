@@ -1,6 +1,10 @@
 //
 // Created by Akash Shrestha on 7/12/18.
 //
+
+#ifndef ALIGNER_ALIGN_SINGLE_H
+#define ALIGNER_ALIGN_SINGLE_H
+
 #include "include/sam_writer.h"
 #include "include/cxxopts.h"
 #include "include/common.h"
@@ -12,8 +16,6 @@
 #include "include/sam_writer.h"
 #include "include/indexer_jobparser.h"
 #include "include/priorityqueue_wrapper.h"
-
-#define DEBUG_MODE 0
 
 struct ReadsWrapper{
     std::shared_ptr<InputRead> read;
@@ -55,9 +57,10 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
     NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(predictedSegment) + " is NULL");
     int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - 10, 0);
     int length = fmin(referenceSegment->second.length(), start+20+windowLength) - start;
+    int numMismatches = 0;
     std::string partOfReference = referenceSegment->second.substr(start, length);
     std::string queryString = forwardStrand ? currentRead->read->sequence : *(currentRead->reverseRead);
-    *score = SamWriter::alignment(partOfReference, queryString, retAlignment);
+    *score = SamWriter::alignment(partOfReference, queryString, retAlignment, &numMismatches);
 
     bool happy;
     retAlignment->qname = currentRead->read->key;
@@ -216,3 +219,6 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
         LOG(INFO) << loadCount << " finished..";
     }
 }
+
+
+#endif

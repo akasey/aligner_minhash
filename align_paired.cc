@@ -47,6 +47,7 @@ inline bool alignPairedMinhashNeighbour(PairedReadsWrapper *currentRead, int &fi
             int &secondPredictedSegment, bool &secondForwardStrand, IndexerJobParser *refBridge,
             Minhash::Neighbour &firstNeighbour, Minhash::Neighbour &secondNeighbour,
             int windowLength, int *score, uint32_t *firstPosition, uint32_t *secondPosition) {
+    int firstNumMismatches = 0, secondNumMismatches = 0;
     int firstOffset, secondOffset;
     std::string firstPartOfReference = getPartOfReference(refBridge, firstPredictedSegment, firstNeighbour, &firstOffset, windowLength);
     std::string secondPartOfReference = getPartOfReference(refBridge, secondPredictedSegment, secondNeighbour, &secondOffset, windowLength);
@@ -55,11 +56,11 @@ inline bool alignPairedMinhashNeighbour(PairedReadsWrapper *currentRead, int &fi
 
     bool happy;
     SamWriter::Alignment nullAlignment;
-    int firstAlignmentScore = SamWriter::alignment(firstPartOfReference, firstQueryString, &nullAlignment);
+    int firstAlignmentScore = SamWriter::alignment(firstPartOfReference, firstQueryString, &nullAlignment, &firstNumMismatches);
     *firstPosition = nullAlignment.pos + firstOffset;
 
     nullAlignment.pos = 0;
-    int secondAlignmentScore = SamWriter::alignment(secondPartOfReference, secondQueryString, &nullAlignment);
+    int secondAlignmentScore = SamWriter::alignment(secondPartOfReference, secondQueryString, &nullAlignment, &secondNumMismatches);
     *secondPosition = nullAlignment.pos + secondOffset;
     *score = (firstAlignmentScore+secondAlignmentScore);
 
