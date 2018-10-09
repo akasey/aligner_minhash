@@ -24,6 +24,7 @@
 
 #include <list>
 
+#define EXTRA_EXTENSION 500
 
 struct Prediction {
     std::vector<std::pair<int, int> > predictions; // (fragment, predictedSegment)
@@ -93,8 +94,8 @@ inline std::string extension(int direction, IndexerJobParser *refBridge, int seg
 
 inline std::string getReadFromReference(int fragment, int segment, int length, int startPoint, bool forwardStrand, IndexerJobParser *refBridge, std::list<std::tuple<int,int,int> > *pathOfSegments) {
     int startPositionForFragment = (refBridge->getWindowLength()/2)*fragment;
-    int requiredLengthAtLeft = startPositionForFragment + 500;
-    int requiredLengthAtRight = length-startPositionForFragment + 500;
+    int requiredLengthAtLeft = startPositionForFragment + EXTRA_EXTENSION;
+    int requiredLengthAtRight = length-startPositionForFragment + EXTRA_EXTENSION;
     if (!forwardStrand) {
         int temp = requiredLengthAtLeft;
         requiredLengthAtLeft = requiredLengthAtRight;
@@ -134,15 +135,16 @@ inline bool alignMinhashNeighbour_long(LongReadsWrapper *currentRead, int &fragm
 //    std::retAlignment->cigar
 #if DEBUG_MODE
     LOG(INFO) << "Alignment score: " << *score << " Happy threshold: " << queryString.length()*0.65;
+    LOG(INFO) << "Mismatches: " << numMismatches << " Mismatches threshold: " << 0.20 * (queryString.length()-2*EXTRA_EXTENSION);
 #endif
 //    if ( queryString.length()*0.65 <= *score) { // atleast 70% matches // consider mapped
-    if ( numMismatches <= 0.10 * queryString.length() ) { // atleast 70% matches // consider mapped
+    if ( numMismatches <= 0.20 * (queryString.length()-2*EXTRA_EXTENSION) ) { // atleast 70% matches // consider mapped
         happy = true;
         retAlignment->flag = retAlignment->flag | (forwardStrand ? 0 : REVERSE_MAPPED);
     }
     else {
         happy = false;
-        retAlignment->flag = retAlignment->flag | SEGMENT_UNMAPPED;
+//        retAlignment->flag = retAlignment->flag | SEGMENT_UNMAPPED;
     }
 #if DEBUG_MODE
     retAlignment->print(std::cout);
