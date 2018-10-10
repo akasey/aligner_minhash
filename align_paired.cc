@@ -46,11 +46,13 @@ inline std::string getPartOfReference(IndexerJobParser *refBridge, int &predicte
 inline bool alignPairedMinhashNeighbour(PairedReadsWrapper *currentRead, int &firstPredictedSegment, bool &firstForwardStrand,
             int &secondPredictedSegment, bool &secondForwardStrand, IndexerJobParser *refBridge,
             Minhash::Neighbour &firstNeighbour, Minhash::Neighbour &secondNeighbour,
-            int windowLength, int *score, uint32_t *firstPosition, uint32_t *secondPosition) {
+            int *score, uint32_t *firstPosition, uint32_t *secondPosition) {
     int firstNumMismatches = 0, secondNumMismatches = 0;
     int firstOffset, secondOffset;
-    std::string firstPartOfReference = getPartOfReference(refBridge, firstPredictedSegment, firstNeighbour, &firstOffset, windowLength);
-    std::string secondPartOfReference = getPartOfReference(refBridge, secondPredictedSegment, secondNeighbour, &secondOffset, windowLength);
+    int windowLength1 = currentRead->read.first->sequence.length();
+    int windowLength2 = currentRead->read.second->sequence.length();
+    std::string firstPartOfReference = getPartOfReference(refBridge, firstPredictedSegment, firstNeighbour, &firstOffset, windowLength1);
+    std::string secondPartOfReference = getPartOfReference(refBridge, secondPredictedSegment, secondNeighbour, &secondOffset, windowLength2);
     std::string firstQueryString = firstForwardStrand ? currentRead->read.first->sequence : *(currentRead->reversedRead.first);
     std::string secondQueryString = secondForwardStrand ? currentRead->read.second->sequence : *(currentRead->reversedRead.second);
 
@@ -76,7 +78,7 @@ inline bool alignPairedMinhashNeighbour(PairedReadsWrapper *currentRead, int &fi
 inline bool tryPairedFirstOutOfGiven(PairedReadsWrapper *currentRead, int &firstPredictedSegment, bool &firstForwardStrand,
                                int &secondPredictedSegment, bool &secondForwardStrand, IndexerJobParser *refBridge,
                                std::set<Minhash::Neighbour> &firstNeighbour, std::set<Minhash::Neighbour> &secondNeighbour,
-                               int windowLength, int *score, uint32_t *firstPosition, uint32_t *secondPosition) {
+                               int *score, uint32_t *firstPosition, uint32_t *secondPosition) {
     if (firstNeighbour.size() > 0 && secondNeighbour.size() > 0) {
         Minhash::Neighbour first = *(firstNeighbour.begin());
         firstNeighbour.erase(firstNeighbour.begin());
@@ -84,7 +86,7 @@ inline bool tryPairedFirstOutOfGiven(PairedReadsWrapper *currentRead, int &first
         secondNeighbour.erase(secondNeighbour.begin());
         return alignPairedMinhashNeighbour(currentRead, firstPredictedSegment, firstForwardStrand,
                         secondPredictedSegment, secondForwardStrand, refBridge, first, second,
-                                           windowLength, score, firstPosition, secondPosition);
+                                           score, firstPosition, secondPosition);
     }
     return false;
 }
@@ -134,7 +136,7 @@ std::string alignOne_paired(PairedReadsWrapper eachRead, std::map<std::string, M
         std::set<Minhash::Neighbour> firstNegNeighbours = mhIndices[key1]->findNeighbours(currentRead->revKmer.first, *(currentRead->totalKmers));
 
         for (std::pair<int, bool> secondPrediction : *(currentRead->predictedSegments.second)) {
-            if (secondPrediction.first >= mhIndices.size() || abs(firstPrediction.first-secondPrediction.first)>1 )
+            if (secondPrediction.first >= mhIndices.size() || fabs(firstPrediction.first-secondPrediction.first)>1 )
                 continue;
             std::string key2 = "index-" + std::to_string(secondPrediction.first) + ".mh";
             std::set<Minhash::Neighbour> secondPosNeighbours = mhIndices[key2]->findNeighbours(currentRead->kmer.second, *(currentRead->totalKmers));
@@ -146,7 +148,7 @@ std::string alignOne_paired(PairedReadsWrapper eachRead, std::map<std::string, M
             bool happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
                                                   secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
                                                   firstNegNeighbours, secondPosNeighbours,
-                                                  referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+                                                  &score, &firstPosition, &secondPosition);
             if (!happy) {
                 queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstNegNeighbours, secondPrediction.first, secondStrandForward, &secondPosNeighbours);
             }
@@ -169,7 +171,7 @@ std::string alignOne_paired(PairedReadsWrapper eachRead, std::map<std::string, M
             happy = tryPairedFirstOutOfGiven(currentRead, firstPredictedSegment, firstStrandForward,
                                              secondPredictedSegment, secondStrandForward, &referenceGenomeBrigde,
                                              firstPosNeighbours, secondNegNeighbours,
-                                             referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+                                             &score, &firstPosition, &secondPosition);
             if (!happy) {
                 queueWrapper.addQueue(firstPrediction.first, firstStrandForward, &firstPosNeighbours, secondPrediction.first, secondStrandForward, &secondNegNeighbours);
             }
@@ -194,7 +196,7 @@ std::string alignOne_paired(PairedReadsWrapper eachRead, std::map<std::string, M
         bool happy = alignPairedMinhashNeighbour(currentRead, firstPartition, firstForwardStrand,
                                                  secondPartition, secondForwardStrand, &referenceGenomeBrigde,
                                                  firstNeighbour, secondNeighbour,
-                                                 referenceGenomeBrigde.getWindowLength(), &score, &firstPosition, &secondPosition);
+                                                 &score, &firstPosition, &secondPosition);
         if (happy) {
             firstReadPosition = firstPosition; secondReadPosition = secondPosition;
             firstAlignmentForward = firstForwardStrand; secondAlignmentForward = secondForwardStrand;

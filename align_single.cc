@@ -51,10 +51,11 @@ inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrappe
 }
 
 inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
-                                  int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge, Minhash::Neighbour &neighbour, int windowLength,
+                                  int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge, Minhash::Neighbour &neighbour,
                                   SamWriter::Alignment *retAlignment, int *score) {
     std::pair<int, std::string> *referenceSegment = refBridge->getSegmentForID(predictedSegment);
     NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(predictedSegment) + " is NULL");
+    int windowLength = currentRead->read->sequence.length();
     int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - 10, 0);
     int length = fmin(referenceSegment->second.length(), start+20+windowLength) - start;
     int numMismatches = 0;
@@ -83,12 +84,12 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 }
 
 inline bool tryFirstOutofGiven(ReadsWrapper *currentRead, int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge,
-                               std::set<Minhash::Neighbour> &neighbours, int windowLength, SamWriter::Alignment *retAlignment, int *score) {
+                               std::set<Minhash::Neighbour> &neighbours, SamWriter::Alignment *retAlignment, int *score) {
     if (neighbours.size() > 0) {
         Minhash::Neighbour first = *(neighbours.begin());
         neighbours.erase(neighbours.begin());
         // atleast 80% matches
-        return alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, windowLength, retAlignment, score);
+        return alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, retAlignment, score);
     }
     return false; // not happy with this alignment
 }
@@ -119,7 +120,7 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
             SamWriter::Alignment alignment;
             bool forwardStrand = true;
             bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
-                                            referenceGenomeBrigde.getWindowLength(), &alignment, &score);
+                                            &alignment, &score);
             if (!happy) {
                 queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
             }
@@ -142,8 +143,7 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
 #if DEBUG_MODE
             LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
 #endif
-            happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred,
-                                       referenceGenomeBrigde.getWindowLength(), &negAlignment, &score);
+            happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score);
             if (!happy) {
                 queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
             }
@@ -168,7 +168,7 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
         int partition; bool forwardStrand; Minhash::Neighbour neighbour;
         queueWrapper.pop(&partition, &forwardStrand, &neighbour);
         SamWriter::Alignment retAlignment; int retScore;
-        bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour, referenceGenomeBrigde.getWindowLength(),
+        bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour,
                                            &retAlignment, &retScore);
         if (happy && retScore > bestScore) {
             bestAlignment = retAlignment;
