@@ -148,6 +148,8 @@ int main(int argc, const char* argv[]) {
     int numClasses = tfMeta.getInt("output_shape");
     if (numClasses-1 != indices.size()) {
         LOG(ERROR) << "Minhash indices doesn't equals to neural network classes";
+        LOG(ERROR) << "Neural network classes: " << numClasses-1;
+        LOG(ERROR) << "Minhash indices: " << indices.size();
         exit(-1);
     }
 

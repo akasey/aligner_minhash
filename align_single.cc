@@ -17,6 +17,8 @@
 #include "include/indexer_jobparser.h"
 #include "include/priorityqueue_wrapper.h"
 
+#define NBEST 3
+
 struct ReadsWrapper{
     std::shared_ptr<InputRead> read;
     std::shared_ptr<Kmer> kmer;
@@ -48,6 +50,16 @@ inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrappe
         }
     }
     predictions.clear();
+}
+
+inline bool isNeigbourPreviouslySeen(std::unordered_set<int> &seenNeigbbours, Minhash::Neighbour &neighbour, int distance) {
+    // If this neighbour is within half of the distance, then return true
+    for (const int &seenNeighbour : seenNeigbbours) {
+        if ( fabs((int)neighbour.id - seenNeighbour) <= distance/2 ) {
+            return true;
+        }
+    }
+    return false;
 }
 
 inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
@@ -84,10 +96,13 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
 }
 
 inline bool tryFirstOutofGiven(ReadsWrapper *currentRead, int &predictedSegment, bool &forwardStrand, IndexerJobParser *refBridge,
-                               std::set<Minhash::Neighbour> &neighbours, SamWriter::Alignment *retAlignment, int *score) {
+                               std::set<Minhash::Neighbour> &neighbours, SamWriter::Alignment *retAlignment, int *score, std::unordered_set<int> &seenNeighbours) {
     if (neighbours.size() > 0) {
-        Minhash::Neighbour first = *(neighbours.begin());
-        neighbours.erase(neighbours.begin());
+        Minhash::Neighbour first;
+        do {
+            first = *(neighbours.begin());
+            neighbours.erase(neighbours.begin());
+        } while (neighbours.size()>0 && isNeigbourPreviouslySeen(seenNeighbours, first, refBridge->getWindowLength()));
         // atleast 80% matches
         return alignMinhashNeighbour(currentRead, predictedSegment, forwardStrand, refBridge, first, retAlignment, score);
     }
@@ -99,11 +114,24 @@ inline void makeUnmapped(ReadsWrapper *currentRead, SamWriter::Alignment &retAli
     retAlignment.flag = retAlignment.flag | SEGMENT_UNMAPPED;
 }
 
-SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde) {
+
+/****
+ *
+ * @NOTE to myself.
+ * Dude you're indexing both positive window and negative windows into minhash.
+ * You are predicting with neural network just once... You could do the same with minhash search as well.
+ * The things that you put into priority queue are just redundant.
+ *
+ * Now if you search minhash just once, you won't know which strand you're dealing with.
+ * So you'll end up trying both strand. Is it expensive this way?
+*****/
+std::vector<std::pair<SamWriter::Alignment, int>> alignOne(ReadsWrapper eachRead, std::map<std::string, Minhash *> &mhIndices, IndexerJobParser &referenceGenomeBrigde, int nBest) {
     ReadsWrapper *currentRead = &eachRead;
     PriorityQueueWrapper queueWrapper;
-    SamWriter::Alignment bestAlignment;
+    std::vector<std::pair<SamWriter::Alignment,int>> bestAlignments;
+    std::unordered_set<int> seenNeighbours; // list of neighbourhood where bestAlignments were already found. So we won't repeat in same territory
     int bestScore = -1 * (currentRead->read->sequence.length());
+    float bestNeighbourJaccardScore = 0.0; // best jaccard score of the minhash neighbour yet.. If the next neighbour we are searching is so worse we terminate search
     int score = 0;
 
     for (std::set<std::pair<int, bool> >::iterator itrr = currentRead->predictedSegments->begin();
@@ -117,17 +145,20 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
 #if DEBUG_MODE
             LOG(INFO) << "+ve Minhash Neigbours: " << posNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
 #endif
+            bestNeighbourJaccardScore = std::max(bestNeighbourJaccardScore,posNeighboursCurrentPred.begin()->jaccard);
             SamWriter::Alignment alignment;
             bool forwardStrand = true;
+            std::pair<int, bool> firstResult = { posNeighboursCurrentPred.begin()->id, forwardStrand};
             bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
-                                            &alignment, &score);
+                                            &alignment, &score, seenNeighbours);
             if (!happy) {
                 queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
             }
-            else if (score > bestScore) {
-                bestAlignment = alignment;
-                bestScore = score;
-                continue;
+            else {
+                bestAlignments.push_back({alignment, score});
+                seenNeighbours.insert(firstResult.first);
+                if (score > bestScore)                 bestScore = score;
+                if (bestAlignments.size() >= nBest)    continue;
             }
 
 
@@ -140,19 +171,20 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
 
             SamWriter::Alignment negAlignment;
             std::set<Minhash::Neighbour> negNeighboursCurrentPred = mhIndices[key]->findNeighbours(currentRead->revKmer, *(currentRead->totalKmers));
+            bestNeighbourJaccardScore = std::max(bestNeighbourJaccardScore,negNeighboursCurrentPred.begin()->jaccard);
+            firstResult = { negNeighboursCurrentPred.begin()->id, forwardStrand};
 #if DEBUG_MODE
             LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
 #endif
-            happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score);
+            happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score, seenNeighbours);
             if (!happy) {
                 queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
             }
             else {
-                if (score > bestScore) {
-                    bestAlignment = negAlignment;
-                    bestScore = score;
-                }
-                continue;
+                bestAlignments.push_back({negAlignment,score});
+                seenNeighbours.insert(firstResult.first);
+                if (score > bestScore)                 bestScore = score;
+                if (bestAlignments.size() >= nBest)    continue;
             }
 
         }
@@ -164,21 +196,35 @@ SamWriter::Alignment alignOne(ReadsWrapper eachRead, std::map<std::string, Minha
     }
 
     int counter = 0;
-    while(queueWrapper.hasNext() && counter++ < 10) {
+    while(queueWrapper.hasNext() && counter++ < 10 && bestAlignments.size() < nBest) {
         int partition; bool forwardStrand; Minhash::Neighbour neighbour;
-        queueWrapper.pop(&partition, &forwardStrand, &neighbour);
+        do {
+            queueWrapper.pop(&partition, &forwardStrand, &neighbour);
+            if (bestNeighbourJaccardScore*0.90 > neighbour.jaccard)
+                break;
+        } while (queueWrapper.hasNext() && isNeigbourPreviouslySeen(seenNeighbours, neighbour, referenceGenomeBrigde.getWindowLength()));
+
+        bestNeighbourJaccardScore = std::max(bestNeighbourJaccardScore, neighbour.jaccard);
+
+        // if non of the neighbour found by minhash hash atleast 90% score of best terminate the search.
+        if (bestNeighbourJaccardScore*0.90 > neighbour.jaccard)
+            break;
+
         SamWriter::Alignment retAlignment; int retScore;
         bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour,
                                            &retAlignment, &retScore);
-        if (happy && retScore > bestScore) {
-            bestAlignment = retAlignment;
+        if (happy) {
+            bestAlignments.push_back({retAlignment,score});
+            seenNeighbours.insert(neighbour.id);
             bestScore = score;
         }
     }
-    if ( bestAlignment.qname.compare("*")==0 ) { // means no mapping found
-        makeUnmapped(currentRead, bestAlignment);
+    if ( bestAlignments.size() == 0 ) { // means no mapping found
+        SamWriter::Alignment dummAlignment;
+        makeUnmapped(currentRead, dummAlignment);
+        bestAlignments.push_back({dummAlignment,0});
     }
-    return bestAlignment;
+    return bestAlignments;
 }
 
 void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference &inferEngine,
@@ -210,8 +256,10 @@ void align_single(std::string &fastqFile, int &tfBatchSize, TensorflowInference 
             for (int i = 0; i < loadCount; i++) {
                 ReadsWrapper eachRead = readsVector[i];
                 threadPool.enqueue([eachRead, &mhIndices, &referenceGenomeBrigde, &samWriter] {
-                    SamWriter::Alignment bestAlignment = alignOne(eachRead, mhIndices, referenceGenomeBrigde);
-                    samWriter.writeAlignment(bestAlignment);
+                    std::vector<std::pair<SamWriter::Alignment, int>> bestAlignments = alignOne(eachRead, mhIndices, referenceGenomeBrigde, NBEST);
+                    for (std::pair<SamWriter::Alignment, int> alig : bestAlignments) {
+                        samWriter.writeAlignment(alig.first);
+                    }
                 });
             }
         }
