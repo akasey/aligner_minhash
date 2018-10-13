@@ -87,3 +87,11 @@ std::string basename(std::string &fqdn) {
         found = -1;
     return fqdn.substr(found+1);
 }
+
+int absoluteValue(int a) {
+    return a<0 ? -a : a;
+}
+
+float absoluteValue(float a) {
+    return a<0 ? -a : a;
+}

@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <cstdlib>
+#include <cstdlib>
 #include <algorithm>
 #include "tf_metaparser.h"
 #include "priorityqueue_wrapper.h"
@@ -43,7 +44,7 @@ int main (int argc, char * const argv[]) {
 //        wrapper.pop(&partition, &forwardStrand, &neighbour);
 //        std::cout << "partition: " << partition << " forwardStrand: " << forwardStrand << " neighbour:(" << neighbour.id << " ," << neighbour.jaccard  << ")" << std::endl;
 //    }
-
+/*
     std::string directory = "/Users/akash/ClionProjects/aligner_minhash/cmake-build-debug/ecoli/model_dir/frozen-graphs/";
     TF_MetaParser meta (directory + "aligner.meta");
     TensorflowInference inference(directory + "frozen_graph.pb", meta, 1);
@@ -76,5 +77,19 @@ int main (int argc, char * const argv[]) {
             std::cout << inner.first << " " << inner.second << std::endl;
         }
     }
+    */
+    srand(10);
+    auto MAX_UINT = std::numeric_limits<Kmer>::max();
+    for (int i=0; i<30; i++) {
+        std::cout << rand() % MAX_UINT << " ";
+    }
+    std::cout << std::endl;
+
+    uint32_t seed = 10;
+    for (int i=0; i<30; i++) {
+        std::cout << rand_r(&seed) % MAX_UINT << " ";
+    }
+    std::cout << std::endl;
+
 
 }

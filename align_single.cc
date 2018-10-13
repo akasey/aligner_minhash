@@ -18,6 +18,7 @@
 #include "include/priorityqueue_wrapper.h"
 
 #define NBEST 3
+#define EXTRA_EXTENSION_SHORT 100
 
 struct ReadsWrapper{
     std::shared_ptr<InputRead> read;
@@ -52,10 +53,25 @@ inline void prediction(TensorflowInference &inferEngine, std::vector<ReadsWrappe
     predictions.clear();
 }
 
+inline void insertNewAlignment(std::vector<std::pair<SamWriter::Alignment,int>> &bestAlignments, std::pair<SamWriter::Alignment,int> newAlignment, int threshold) {
+    bool inserted = false;
+    for (int i=0; i<bestAlignments.size(); i++) {
+        std::pair<SamWriter::Alignment, int> *each = &bestAlignments[i];
+        if (absoluteValue((int)(each->first.pos - newAlignment.first.pos)) <= threshold) {
+            if (each->second <= newAlignment.second) {
+                bestAlignments[i] = newAlignment;
+                inserted = true;
+            }
+        }
+    }
+    if (!inserted)
+        bestAlignments.push_back(newAlignment);
+}
+
 inline bool isNeigbourPreviouslySeen(std::unordered_set<int> &seenNeigbbours, Minhash::Neighbour &neighbour, int distance) {
     // If this neighbour is within half of the distance, then return true
     for (const int &seenNeighbour : seenNeigbbours) {
-        if ( fabs((int)neighbour.id - seenNeighbour) <= distance/2 ) {
+        if ( absoluteValue(((int)neighbour.id - seenNeighbour)) <= EXTRA_EXTENSION_SHORT/2 ) {
             return true;
         }
     }
@@ -68,8 +84,8 @@ inline bool alignMinhashNeighbour(ReadsWrapper *currentRead,
     std::pair<int, std::string> *referenceSegment = refBridge->getSegmentForID(predictedSegment);
     NULL_CHECK(referenceSegment, "Reference for segment " + std::to_string(predictedSegment) + " is NULL");
     int windowLength = currentRead->read->sequence.length();
-    int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - 10, 0);
-    int length = fmin(referenceSegment->second.length(), start+20+windowLength) - start;
+    int start = fmax((int)(neighbour.id) - (int)(referenceSegment->first) - EXTRA_EXTENSION_SHORT, 0);
+    int length = fmin(referenceSegment->second.length(), start+EXTRA_EXTENSION_SHORT*2+windowLength) - start;
     int numMismatches = 0;
     std::string partOfReference = referenceSegment->second.substr(start, length);
     std::string queryString = forwardStrand ? currentRead->read->sequence : *(currentRead->reverseRead);
@@ -118,7 +134,7 @@ inline void makeUnmapped(ReadsWrapper *currentRead, SamWriter::Alignment &retAli
 /****
  *
  * @NOTE to myself.
- * Dude you're indexing both positive window and negative windows into minhash.
+ * Dude you're indexing both positive window and negative windows into minhash. - Oh no, we're indexing positive windows only
  * You are predicting with neural network just once... You could do the same with minhash search as well.
  * The things that you put into priority queue are just redundant.
  *
@@ -133,6 +149,10 @@ std::vector<std::pair<SamWriter::Alignment, int>> alignOne(ReadsWrapper eachRead
     int bestScore = -1 * (currentRead->read->sequence.length());
     float bestNeighbourJaccardScore = 0.0; // best jaccard score of the minhash neighbour yet.. If the next neighbour we are searching is so worse we terminate search
     int score = 0;
+
+#if DEBUG_MODE
+    LOG(INFO) << "Predicted size :" << currentRead->predictedSegments->size();
+#endif
 
     for (std::set<std::pair<int, bool> >::iterator itrr = currentRead->predictedSegments->begin();
          itrr != currentRead->predictedSegments->end(); itrr++) {
@@ -151,15 +171,14 @@ std::vector<std::pair<SamWriter::Alignment, int>> alignOne(ReadsWrapper eachRead
             std::pair<int, bool> firstResult = { posNeighboursCurrentPred.begin()->id, forwardStrand};
             bool happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, posNeighboursCurrentPred,
                                             &alignment, &score, seenNeighbours);
-            if (!happy) {
-                queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
-            }
-            else {
-                bestAlignments.push_back({alignment, score});
+
+            if (happy) {
+                insertNewAlignment(bestAlignments, {alignment, score}, EXTRA_EXTENSION_SHORT);
                 seenNeighbours.insert(firstResult.first);
                 if (score > bestScore)                 bestScore = score;
                 if (bestAlignments.size() >= nBest)    continue;
             }
+            queueWrapper.addQueue(pair.first, true, &posNeighboursCurrentPred);
 
 
             // Also try first of reverse strand
@@ -177,15 +196,14 @@ std::vector<std::pair<SamWriter::Alignment, int>> alignOne(ReadsWrapper eachRead
             LOG(INFO) << "-ve Minhash Neigbours: " << negNeighboursCurrentPred.size() << " in segment: " << std::to_string(pair.first);
 #endif
             happy = tryFirstOutofGiven(currentRead, partition, forwardStrand, &referenceGenomeBrigde, negNeighboursCurrentPred, &negAlignment, &score, seenNeighbours);
-            if (!happy) {
-                queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
-            }
-            else {
-                bestAlignments.push_back({negAlignment,score});
+
+            if (happy) {
+                insertNewAlignment(bestAlignments, {negAlignment, score}, EXTRA_EXTENSION_SHORT);
                 seenNeighbours.insert(firstResult.first);
                 if (score > bestScore)                 bestScore = score;
                 if (bestAlignments.size() >= nBest)    continue;
             }
+            queueWrapper.addQueue(pair.first, false, &negNeighboursCurrentPred);
 
         }
 #if DEBUG_MODE
@@ -214,7 +232,7 @@ std::vector<std::pair<SamWriter::Alignment, int>> alignOne(ReadsWrapper eachRead
         bool happy = alignMinhashNeighbour(currentRead, partition, forwardStrand, &referenceGenomeBrigde, neighbour,
                                            &retAlignment, &retScore);
         if (happy) {
-            bestAlignments.push_back({retAlignment,score});
+            insertNewAlignment(bestAlignments, {retAlignment, retScore}, EXTRA_EXTENSION_SHORT);
             seenNeighbours.insert(neighbour.id);
             bestScore = score;
         }

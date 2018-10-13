@@ -35,8 +35,14 @@ inline void pairedPrediction(TensorflowInference &inferEngine, std::vector<Paire
 }
 
 
-int main() {
-    std::string DIRECTORY = "/Users/akash/PycharmProjects/aligner/sample_classification_run/pairedReads/";
+int main(int argc, const char* argv[]) {
+    if (argc < 3) {
+        std::cout << "<exe> <tensorflow_frozen_dir> <refdir>";
+        exit(1);
+    }
+    std::string tfModelDir(argv[1]);
+    std::string DIRECTORY(argv[2]);
+
 
     std::map<int, std::pair<int,int>> segmentsRegion;
     FastaMM fasta(DIRECTORY);
@@ -53,15 +59,38 @@ int main() {
     int K = refBridge.getK();
     int tfBatchSize = 10;
 
-
-    std::string tfModelDir = DIRECTORY + "frozen-graphs";
     TF_MetaParser tfMeta(tfModelDir+"/aligner.meta");
     TensorflowInference inferEngine(
             tfModelDir + "/frozen_graph.pb",
             tfMeta, 4);
 
+    while (true) {
+        std::string mystr;
+        std::cout << "Enter sequence: " << std::endl;
+        getline(std::cin, mystr);
+        int totalKmer = 0;
+        std::shared_ptr<Kmer> kmer0 = std::shared_ptr<Kmer>(encodeWindow(mystr, &totalKmer));
+        std::pair<std::shared_ptr<Kmer>, int> onePair = { kmer0, totalKmer };
+        std::vector< std::pair<std::shared_ptr<Kmer>, int> > pairs;
+        pairs.push_back(onePair);
+        Tensor tensor = inferEngine.makeTensor(pairs);
+        std::vector<std::set<std::pair<int, bool> > > predictions = inferEngine.inference(tensor);
 
-    std::string files[] = { DIRECTORY+"/out.bwa.read1.fastq", DIRECTORY+"/out.bwa.read2.fastq" };
+        std::cout << "Prediction size: " << predictions[0].size() << std::endl;
+        for (const std::pair<int, bool> &prediction : predictions[0]) {
+            std::cout << prediction.first << " ";
+            if (prediction.first < segmentsRegion.size()) {
+                auto region = segmentsRegion[prediction.first];
+                std::cout << "[" << region.first << "-" << region.second << "], ";
+            }
+        }
+        std::cout << std::endl;
+
+        std::cout << "------------------------------" << std::endl;
+    }
+
+
+/*    std::string files[] = { DIRECTORY+"/out.bwa.read1.fastq", DIRECTORY+"/out.bwa.read2.fastq" };
     PairedFastQ fastaLoader( files );
 
     while (fastaLoader.hasNext()) {
@@ -113,7 +142,7 @@ int main() {
             }
             std::cout << std::endl;
         }
-    }
+    }*/
 
     return 0;
 }

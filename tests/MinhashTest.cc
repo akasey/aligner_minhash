@@ -166,13 +166,30 @@ int main(int argc, const char * argv[]) {
         std::string mystr;
         std::cout << "Enter sequence: " << std::endl;
         getline(std::cin, mystr);
-        for (int i=0; i<indices.size(); i++) {
-            std::string key = "index-" + std::to_string(i) + ".mh";
-            std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(mystr);
-            if (neighbours.size() > 0) {
-                std:: cout << "Neighbours: " << neighbours.size() << " on segment: " << i << std::endl;
-            }
+        std::vector<std::string> splits = split(mystr, "$");
+        if (splits.size() == 1) {
+            for (int i = 0; i < indices.size(); i++) {
+                std::string key = "index-" + std::to_string(i) + ".mh";
+                std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(mystr);
+                if (neighbours.size() > 0) {
+                    std::cout << "Neighbours: " << neighbours.size() << " on segment: " << i << std::endl;
+                }
 
+            }
+        }
+        else if (splits.size() == 2) {
+            int splitV = std::stoi(splits[1]);
+            if (splitV < mhIndices.size()) {
+                std::string key = "index-" + std::to_string(splitV) + ".mh";
+                std::set<Minhash::Neighbour> neighbours = mhIndices[key]->findNeighbours(mystr);
+                if (neighbours.size() > 0) {
+                    std::cout << "Neighbours: " << neighbours.size() << " on segment: " << splitV << std::endl;
+                    for (const Minhash::Neighbour &each : neighbours) {
+                        std::cout << each.id << " ";
+                    }
+                    std::cout << std::endl;
+                }
+            }
         }
         std::cout << "------------------------------" << std::endl;
     }

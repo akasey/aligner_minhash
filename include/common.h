@@ -50,6 +50,9 @@ std::string & rtrim(std::string & str);
 bool str_endswith(std::string &original, std::string &with);
 std::vector<std::string> split(std::string sentence, std::string delimiter);
 
+int absoluteValue(int a);
+float absoluteValue(float a);
+
 /* File system related */
 std::vector<std::string> getFilesInDirectory(std::string directory, std::string extensionFilter = "");
 void mkdir(std::string dirname);
