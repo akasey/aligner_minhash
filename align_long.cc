@@ -18,7 +18,6 @@
 #include "include/tensorflow_inference.h"
 #include "include/ThreadPool.h"
 #include "include/fastaQ.h"
-#include "include/sam_writer.h"
 #include "include/indexer_jobparser.h"
 #include "include/long_priorityqueue_wrapper.h"
 
@@ -115,7 +114,8 @@ inline bool alignMinhashNeighbour_long(LongReadsWrapper *currentRead, int &fragm
     int numMismatches = 0;
 
     std::string queryString = forwardStrand ? currentRead->read->sequence : *(currentRead->reverseRead);
-    *score = SamWriter::alignment(referenceSegment, queryString, retAlignment, &numMismatches);
+//    *score = SamWriter::alignment(referenceSegment, queryString, retAlignment, &numMismatches);
+    *score = SamWriter::alignmentEdlib(referenceSegment, queryString, retAlignment, &numMismatches);
 
 #if DEBUG_MODE
     std::cout << "Reference: " << std::endl;

@@ -79,6 +79,34 @@ int SamWriter::alignment(std::string &referenceSegment, std::string &read, SamWr
     return (alignment.sw_score/2); // because match score is 2
 }
 
+int SamWriter::alignmentEdlib(std::string &referenceSegment, std::string &read, SamWriter::Alignment *returnAlignment, int *num_mismatches) {
+    *num_mismatches = read.length();
+    EdlibAlignTask task = EDLIB_TASK_PATH;
+    EdlibAlignMode mode = EDLIB_MODE_HW;
+
+    char lowercase[] = {'a','c','g','t'};
+    char uppercase[] = {'A', 'C', 'G', 'T'};
+    EdlibEqualityPair pairs[4];
+    for (int i=0; i<4; i++) {
+        EdlibEqualityPair pair;
+        pair.first = lowercase[i];
+        pair.second = uppercase[i];
+        pairs[i] = pair;
+    }
+    EdlibAlignResult result = edlibAlign(read.c_str(), read.length(), referenceSegment.c_str(), referenceSegment.length(),
+                                         edlibNewAlignConfig(-1, mode, task, pairs, 4));
+    if (result.status == EDLIB_STATUS_OK) {
+        char* cigar = edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_EXTENDED);
+        returnAlignment->mapq = 255; // not available
+        returnAlignment-> cigar = std::string(cigar);
+        returnAlignment->pos = *(result.startLocations);
+        returnAlignment->seq = std::string(read);
+        *num_mismatches = result.editDistance;
+    }
+    edlibFreeAlignResult(result);
+    return read.length() - *num_mismatches;
+}
+
 void SamWriter::writeAlignment(Alignment &alignment) {
     std::unique_lock<std::mutex> lock(mutex);
     file << alignment.qname << "\t"

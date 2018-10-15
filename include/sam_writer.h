@@ -11,6 +11,7 @@
 #include "fastamm.h"
 #include "ssw.h"
 #include "ssw_cpp.h"
+#include "edlib.h"
 
 #define PAIRED_READ 1
 #define EACH_ALIGNED 2
@@ -72,6 +73,7 @@ public:
     void writeHeaders(std::string commandInvoked, FastaMM &fastamm);
     void writeAlignment(Alignment &alignment);
     static int alignment(std::string &referenceSegment, std::string &read, Alignment *returnAlignment, int *num_mismatches);
+    static int alignmentEdlib(std::string &referenceSegment, std::string &read, Alignment *returnAlignment, int *num_mismatches);
 
 };
 

@@ -13,6 +13,10 @@ find_package(TensorflowCC REQUIRED)
 set(SswCC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/")
 find_package(SswCC REQUIRED)
 
+# Edlib(https://github.com/Martinsos/edlib) Library
+set(EdlibCC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/")
+find_package(EdlibCC REQUIRED)
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
@@ -31,6 +35,7 @@ add_executable(aligner align.cc align_single.cc align_paired.cc align_long.cc
 target_link_libraries(aligner TensorflowCC::Static)
 target_link_libraries(aligner ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(aligner SswCC::Static)
+target_link_libraries(aligner EdlibCC)
 
 
 add_executable(minhash_test tests/MinhashTest.cc include/minhash.cc include/common.cc include/kmer.cc include/fastamm.cc include/indexer_jobparser.cc
@@ -46,6 +51,7 @@ target_link_libraries(inference_test TensorflowCC::Static)
 target_link_libraries(inference_test ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(playground tests/PlayGround.cc include/priorityqueue_wrapper.cc include/minhash.cc include/common.cc include/kmer.cc include/tf_metaparser.cc include/tensorflow_inference.cc)
+target_link_libraries(playground EdlibCC)
 target_link_libraries(playground SswCC::Static)
 target_link_libraries(playground TensorflowCC::Static)
 target_link_libraries(playground ${CMAKE_THREAD_LIBS_INIT})
